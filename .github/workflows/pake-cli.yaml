@@ -9,59 +9,46 @@ jobs:
   build-win:
     runs-on: windows-latest
     steps:
-      # ---------- 1. checkout ----------
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # ---------- 2. install Rust ----------
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      # ---------- 3. install Node ----------
       - name: Install Node 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # ---------- 4. clone Pake ----------
       - name: Clone Pake
-        run: |
-          git clone https://github.com/tw93/pake.git _pake
+        run: git clone https://github.com/tw93/pake.git _pake
 
-      # ---------- 5. install deps ----------
       - name: Install Pake deps
         working-directory: _pake
         run: npm install
 
-      # ---------- 5b. stage userscript ----------
-      - name: Stage userscript for injection
+      - name: Download userscript
         run: |
           New-Item -ItemType Directory -Force _pake/userscript
           Invoke-WebRequest `
             -Uri https://raw.githubusercontent.com/fairy-root/youtube-adblock/main/youtubeadblock.js `
             -OutFile _pake/userscript/youtubeadblock.js
 
-      # ---------- 6. build ----------
-      - name: Build MSI with injected script
-        shell: pwsh
+      - name: Build Pake app
         working-directory: _pake
         run: |
-          npx pake https://www.youtube.com `
-            --name YouTube-AdBlock `
-            --targets x86_64-pc-windows-msvc `
-            --inject userscript/youtubeadblock.js `
-            --multi-arch `
-            --no-console
+          npx pake https://www.youtube.com --name YouTube-AdBlock --targets x86_64-pc-windows-msvc --inject userscript/youtubeadblock.js
 
-      # ---------- 7. find MSI ----------
-      - name: Collect MSI
+      - name: Find and rename MSI
         shell: pwsh
         run: |
-          $msi = Get-ChildItem -Path _pake -Recurse -Filter *.msi | Select-Object -First 1
-          if (-not $msi) { throw "No MSI produced" }
-          Copy-Item $msi.FullName youtube-adblock-x64.msi
+          $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
+          if ($msi) {
+            Copy-Item $msi.FullName youtube-adblock-x64.msi
+          } else {
+            throw "MSI not found"
+          }
 
-      # ---------- 8. upload ----------
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
