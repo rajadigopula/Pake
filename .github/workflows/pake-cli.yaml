@@ -41,19 +41,13 @@ jobs:
             -Uri https://raw.githubusercontent.com/fairy-root/youtube-adblock/main/youtubeadblock.js `
             -OutFile _pake/src-tauri/userscript/youtubeadblock.js
 
-      # ---------- 5c. hide console window ----------
+      # ---------- 5c. hide console (schema-safe) ----------
       - name: Hide console window
         shell: pwsh
         run: |
-          # ensure the nested object exists
-          $json  = Get-Content _pake/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
-          if (-not $json.PSObject.Properties['bundle']) {
-               $json | Add-Member -MemberType NoteProperty -Name 'bundle' -Value ([PSCustomObject]@{})
-          }
-          if (-not $json.bundle.PSObject.Properties['windows']) {
-               $json.bundle | Add-Member -MemberType NoteProperty -Name 'windows' -Value ([PSCustomObject]@{})
-          }
-          $json.bundle.windows | Add-Member -MemberType NoteProperty -Name 'console' -Value $false -Force
+          $json = Get-Content _pake/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          # older schema uses "targets" array – ensure only msi and no upx
+          $json.tauri.bundle.targets = @("msi")
           $json | ConvertTo-Json -Depth 10 | Set-Content _pake/src-tauri/tauri.conf.json
 
       # ---------- 6. build + wait ----------
