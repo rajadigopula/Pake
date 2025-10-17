@@ -42,15 +42,15 @@ jobs:
             -OutFile userscript/youtubeadblock.js
 
       # ---------- 6. build MSI ----------
+           # ---------- 6. build MSI ----------
       - name: Build MSI with injected script
-        shell: pwsh
+        working-directory: _pake
         run: |
-          cd _pake
-          npm run pake https://gemini.google.com `
-                      --name        YouTube-AdBlock `
-                      --targets     x86_64-pc-windows-msvc `
-                      --inject      ../userscript/youtubeadblock.js `
-                      --debug
+          npx pake https://gemini.google.com `
+                  --name        YouTube-AdBlock `
+                  --targets     x86_64-pc-windows-msvc `
+                  --inject      ../userscript/youtubeadblock.js `
+                  --debug
 
       # ---------- 7. copy artefacts ----------
       - name: Collect MSI
