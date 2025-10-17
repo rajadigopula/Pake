@@ -42,21 +42,21 @@ jobs:
             -OutFile userscript/youtubeadblock.js
 
       # ---------- 6. build MSI ----------
-           # ---------- 6. build MSI ----------
+      # ---------- 6. build + wait ----------
       - name: Build MSI with injected script
+        shell: pwsh
         working-directory: _pake
         run: |
-          npx pake https://gemini.google.com `
-                  --name        YouTube-AdBlock `
-                  --targets     x86_64-pc-windows-msvc `
-                  --inject      ../userscript/youtubeadblock.js `
-                  --debug
+          $job = Start-Process npx -ArgumentList "pake","https://gemini.google.com","--name","YouTube-AdBlock","--targets","x86_64-pc-windows-msvc","--inject","../userscript/youtubeadblock.js","--debug" -NoNewWindow -PassThru
+          $job.WaitForExit()
+          if ($job.ExitCode -ne 0) { throw "Build failed" }
 
-      # ---------- 7. copy artefacts ----------
+      # ---------- 7. find MSI anywhere ----------
       - name: Collect MSI
         shell: pwsh
         run: |
-          $msi = Get-ChildItem -Recurse -Filter *.msi _pake/src-tauri/target/release/bundle/msi | Select-Object -First 1
+          $msi = Get-ChildItem -Path . -Recurse -Filter *.msi | Select-Object -First 1
+          if (-not $msi) { throw "No MSI produced" }
           Copy-Item $msi.FullName youtube-adblock-x64.msi
 
       # ---------- 8. upload ----------
@@ -65,3 +65,6 @@ jobs:
         with:
           name: youtube-adblock-x64
           path: youtube-adblock-x64.msi
+
+
+     
