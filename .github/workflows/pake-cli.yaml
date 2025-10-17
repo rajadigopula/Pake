@@ -43,10 +43,18 @@ jobs:
 
       # ---------- 5c. hide console window ----------
       - name: Hide console window
+        shell: pwsh
         run: |
-          $conf = Get-Content _pake/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
-          $conf.tauri.bundle.windows.console = $false
-          $conf | ConvertTo-Json -Depth 10 | Set-Content _pake/src-tauri/tauri.conf.json
+          # ensure the nested object exists
+          $json  = Get-Content _pake/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          if (-not $json.PSObject.Properties['bundle']) {
+               $json | Add-Member -MemberType NoteProperty -Name 'bundle' -Value ([PSCustomObject]@{})
+          }
+          if (-not $json.bundle.PSObject.Properties['windows']) {
+               $json.bundle | Add-Member -MemberType NoteProperty -Name 'windows' -Value ([PSCustomObject]@{})
+          }
+          $json.bundle.windows | Add-Member -MemberType NoteProperty -Name 'console' -Value $false -Force
+          $json | ConvertTo-Json -Depth 10 | Set-Content _pake/src-tauri/tauri.conf.json
 
       # ---------- 6. build + wait ----------
       - name: Build MSI with injected script
