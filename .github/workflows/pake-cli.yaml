@@ -1,4 +1,4 @@
-name: Build Kimi-K2 Pake MSI
+name: Build Copilot Pake MSI
 
 on:
   push:
@@ -30,14 +30,14 @@ jobs:
       - name: Build Pake app
         working-directory: _pake
         run: |
-          npx pake https://www.kimi.com --name Kimi-K2 --targets x86_64-pc-windows-msvc 
+          npx pake https://copilot.microsoft.com --name Copilot --targets x86_64-pc-windows-msvc 
 
       - name: Find and rename MSI
         shell: pwsh
         run: |
           $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
-            Copy-Item $msi.FullName kimi-k2-x64.msi
+            Copy-Item $msi.FullName Copilot-x64.msi
           } else {
             throw "MSI not found"
           }
@@ -45,5 +45,5 @@ jobs:
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
-          name: kimi-k2-x64
-          path: kimi-k2-x64.msi
+          name: Copilot-x64
+          path: Copilot-x64.msi
