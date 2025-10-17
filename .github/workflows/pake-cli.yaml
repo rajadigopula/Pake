@@ -30,11 +30,13 @@ jobs:
 
       - name: Build Pake app
         working-directory: _pake
+        shell: pwsh
         run: |
-          npx pake https://www.youtube.com \
-            --name Youtube \
-            --targets x86_64-pc-windows-msvc \
-            --inject https://raw.githubusercontent.com/rajadigopula/Pake/main/youtube-ad-blocker.user.js
+          npx pake https://www.youtube.com `
+          --name Youtube `
+          --targets x86_64-pc-windows-msvc `
+          --inject https://raw.githubusercontent.com/rajadigopula/Pake/main/youtube-ad-blocker.user.js
+
 
       - name: Find and rename MSI
         shell: pwsh
