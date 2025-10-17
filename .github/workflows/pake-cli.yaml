@@ -45,9 +45,11 @@ jobs:
       - name: Hide console window
         shell: pwsh
         run: |
-          $json = Get-Content _pake/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
-          # older schema uses "targets" array – ensure only msi and no upx
-          $json.tauri.bundle.targets = @("msi")
+          $json  = Get-Content _pake/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          # create whole chain if absent
+          if (-not $json.PSObject.Properties['tauri'])        { $json | Add-Member -MemberType NoteProperty -Name 'tauri'        -Value ([PSCustomObject]@{}) }
+          if (-not $json.tauri.PSObject.Properties['bundle']) { $json.tauri | Add-Member -MemberType NoteProperty -Name 'bundle' -Value ([PSCustomObject]@{}) }
+          $json.tauri.bundle | Add-Member -MemberType NoteProperty -Name 'targets' -Value @('msi') -Force
           $json | ConvertTo-Json -Depth 10 | Set-Content _pake/src-tauri/tauri.conf.json
 
       # ---------- 6. build + wait ----------
