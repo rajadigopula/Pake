@@ -31,23 +31,29 @@ jobs:
       # ---------- 5. install deps (NO ci) ----------
       - name: Install Pake deps
         working-directory: _pake
-        run: npm install          # creates package-lock.json locally
+        run: npm install
 
-      # ---------- 5. fetch userscript ----------
-      - name: Download userscript
+      # ---------- 5b. stage userscript INSIDE src-tauri ----------
+      - name: Stage userscript for injection
         run: |
-          New-Item -ItemType Directory -Force userscript
+          New-Item -ItemType Directory -Force _pake/src-tauri/userscript
           Invoke-WebRequest `
             -Uri https://raw.githubusercontent.com/fairy-root/youtube-adblock/main/youtubeadblock.js `
-            -OutFile userscript/youtubeadblock.js
+            -OutFile _pake/src-tauri/userscript/youtubeadblock.js
 
-      # ---------- 6. build MSI ----------
+      # ---------- 5c. hide console window ----------
+      - name: Hide console window
+        run: |
+          $conf = Get-Content _pake/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          $conf.tauri.bundle.windows.console = $false
+          $conf | ConvertTo-Json -Depth 10 | Set-Content _pake/src-tauri/tauri.conf.json
+
       # ---------- 6. build + wait ----------
       - name: Build MSI with injected script
         shell: pwsh
         working-directory: _pake
         run: |
-          $job = Start-Process npx -ArgumentList "pake","https://www.youtube.com/","--name","YouTube-AdBlock","--targets","x86_64-pc-windows-msvc","--inject","../userscript/youtubeadblock.js","--debug" -NoNewWindow -PassThru
+          $job = Start-Process npx -ArgumentList "pake","https://www.youtube.com","--name","YouTube-AdBlock","--targets","x86_64-pc-windows-msvc","--inject","src-tauri/userscript/youtubeadblock.js","--debug" -NoNewWindow -PassThru
           $job.WaitForExit()
           if ($job.ExitCode -ne 0) { throw "Build failed" }
 
@@ -65,6 +71,3 @@ jobs:
         with:
           name: youtube-adblock-x64
           path: youtube-adblock-x64.msi
-
-
-     
