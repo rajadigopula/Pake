@@ -47,7 +47,7 @@ jobs:
         shell: pwsh
         working-directory: _pake
         run: |
-          $job = Start-Process npx -ArgumentList "pake","https://gemini.google.com","--name","YouTube-AdBlock","--targets","x86_64-pc-windows-msvc","--inject","../userscript/youtubeadblock.js","--debug" -NoNewWindow -PassThru
+          $job = Start-Process npx -ArgumentList "pake","https://www.youtube.com/","--name","YouTube-AdBlock","--targets","x86_64-pc-windows-msvc","--inject","../userscript/youtubeadblock.js","--debug" -NoNewWindow -PassThru
           $job.WaitForExit()
           if ($job.ExitCode -ne 0) { throw "Build failed" }
 
