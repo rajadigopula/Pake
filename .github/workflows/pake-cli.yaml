@@ -28,44 +28,36 @@ jobs:
         run: |
           git clone https://github.com/tw93/pake.git _pake
 
-      # ---------- 5. install deps (NO ci) ----------
+      # ---------- 5. install deps ----------
       - name: Install Pake deps
         working-directory: _pake
         run: npm install
 
-      # ---------- 5b. stage userscript INSIDE src-tauri ----------
+      # ---------- 5b. stage userscript ----------
       - name: Stage userscript for injection
         run: |
-          New-Item -ItemType Directory -Force _pake/src-tauri/userscript
+          New-Item -ItemType Directory -Force _pake/userscript
           Invoke-WebRequest `
             -Uri https://raw.githubusercontent.com/fairy-root/youtube-adblock/main/youtubeadblock.js `
-            -OutFile _pake/src-tauri/userscript/youtubeadblock.js
+            -OutFile _pake/userscript/youtubeadblock.js
 
-      # ---------- 5c. hide console (schema-safe) ----------
-      - name: Hide console window
-        shell: pwsh
-        run: |
-          $json  = Get-Content _pake/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
-          # create whole chain if absent
-          if (-not $json.PSObject.Properties['tauri'])        { $json | Add-Member -MemberType NoteProperty -Name 'tauri'        -Value ([PSCustomObject]@{}) }
-          if (-not $json.tauri.PSObject.Properties['bundle']) { $json.tauri | Add-Member -MemberType NoteProperty -Name 'bundle' -Value ([PSCustomObject]@{}) }
-          $json.tauri.bundle | Add-Member -MemberType NoteProperty -Name 'targets' -Value @('msi') -Force
-          $json | ConvertTo-Json -Depth 10 | Set-Content _pake/src-tauri/tauri.conf.json
-
-      # ---------- 6. build + wait ----------
+      # ---------- 6. build ----------
       - name: Build MSI with injected script
         shell: pwsh
         working-directory: _pake
         run: |
-          $job = Start-Process npx -ArgumentList "pake","https://www.youtube.com","--name","YouTube-AdBlock","--targets","x86_64-pc-windows-msvc","--inject","src-tauri/userscript/youtubeadblock.js","--debug" -NoNewWindow -PassThru
-          $job.WaitForExit()
-          if ($job.ExitCode -ne 0) { throw "Build failed" }
+          npx pake https://www.youtube.com `
+            --name YouTube-AdBlock `
+            --targets x86_64-pc-windows-msvc `
+            --inject userscript/youtubeadblock.js `
+            --multi-arch `
+            --no-console
 
-      # ---------- 7. find MSI anywhere ----------
+      # ---------- 7. find MSI ----------
       - name: Collect MSI
         shell: pwsh
         run: |
-          $msi = Get-ChildItem -Path . -Recurse -Filter *.msi | Select-Object -First 1
+          $msi = Get-ChildItem -Path _pake -Recurse -Filter *.msi | Select-Object -First 1
           if (-not $msi) { throw "No MSI produced" }
           Copy-Item $msi.FullName youtube-adblock-x64.msi
 
