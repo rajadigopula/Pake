@@ -1,51 +1,64 @@
-name: Build YouTube Adblock
+name: Build YouTube-AdBlock Pake MSI
+
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  build-win:
+    runs-on: windows-latest
     steps:
-      - uses: tw93/Pake@main
+      # ---------- 1. checkout ----------
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # ---------- 2. install Rust ----------
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      # ---------- 3. install Node ----------
+      - name: Install Node 20
+        uses: actions/setup-node@v4
         with:
-          url: "https://www.youtube.com"
-          name: "YouTube Adblock"
-          inject: |
-            // ==UserScript==
-            // @name         YouTube Adblock
-            // @namespace    http://tampermonkey.net/
-            // @version      1.0
-            // @description  Block YouTube ads
-            // @author       fairy-root
-            // @match        *://*.youtube.com/*
-            // @icon         https://www.google.com/s2/favicons?sz=64&domain=youtube.com
-            // @grant        none
-            // ==/UserScript==
-            (function() {
-                'use strict';
-                function blockAds() {
-                    const selectors = [
-                        '.ad-showing .video-ads',
-                        '.ytd-ad-slot-renderer',
-                        '.ytd-action-companion-ad-renderer',
-                        '.ytd-compact-promoted-video-renderer',
-                        '.ytd-promoted-sparkles-web-renderer'
-                    ];
-                    
-                    selectors.forEach(selector => {
-                        document.querySelectorAll(selector).forEach(el => {
-                            if (el.parentNode) el.parentNode.removeChild(el);
-                        });
-                    });
-                    
-                    const videos = document.querySelectorAll('video');
-                    videos.forEach(video => {
-                        if (video.duration <= 90 && video.currentTime === 0) {
-                            video.currentTime = video.duration;
-                        }
-                    });
-                }
-                
-                setInterval(blockAds, 1000);
-                document.addEventListener('DOMContentLoaded', blockAds);
-            })();
+          node-version: 20
+
+      # ---------- 4. clone Pake ----------
+      - name: Clone Pake
+        run: |
+          git clone https://github.com/tw93/pake.git _pake
+          cd _pake
+          npm ci
+
+      # ---------- 5. fetch userscript ----------
+      - name: Download userscript
+        run: |
+          New-Item -ItemType Directory -Force userscript
+          Invoke-WebRequest `
+            -Uri https://raw.githubusercontent.com/fairy-root/youtube-adblock/main/youtubeadblock.js `
+            -OutFile userscript/youtubeadblock.js
+
+      # ---------- 6. build MSI ----------
+      - name: Build MSI with injected script
+        shell: pwsh
+        run: |
+          cd _pake
+          npm run pake https://gemini.google.com `
+                      --name        YouTube-AdBlock `
+                      --targets     x86_64-pc-windows-msvc `
+                      --inject      ../userscript/youtubeadblock.js `
+                      --debug
+
+      # ---------- 7. copy artefacts ----------
+      - name: Collect MSI
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem -Recurse -Filter *.msi _pake/src-tauri/target/release/bundle/msi | Select-Object -First 1
+          Copy-Item $msi.FullName youtube-adblock-x64.msi
+
+      # ---------- 8. upload ----------
+      - name: Upload MSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: youtube-adblock-x64
+          path: youtube-adblock-x64.msi
