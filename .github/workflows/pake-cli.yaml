@@ -27,8 +27,11 @@ jobs:
       - name: Clone Pake
         run: |
           git clone https://github.com/tw93/pake.git _pake
-          cd _pake
-          npm ci
+
+      # ---------- 5. install deps (NO ci) ----------
+      - name: Install Pake deps
+        working-directory: _pake
+        run: npm install          # creates package-lock.json locally
 
       # ---------- 5. fetch userscript ----------
       - name: Download userscript
