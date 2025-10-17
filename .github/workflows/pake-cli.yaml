@@ -37,7 +37,7 @@ jobs:
         run: |
           $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
-            Copy-Item $msi.FullName youtube-adblock-x64.msi
+            Copy-Item $msi.FullName kimi-k2-x64.msi
           } else {
             throw "MSI not found"
           }
@@ -46,4 +46,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: kimi-k2-x64
-          path: kimi-k2x64.msi
+          path: kimi-k2-x64.msi
