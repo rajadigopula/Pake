@@ -1,4 +1,4 @@
-name: Build YouTube-AdBlock Pake MSI
+name: Build Kimi-K2 Pake MSI
 
 on:
   push:
@@ -27,17 +27,10 @@ jobs:
         working-directory: _pake
         run: npm install
 
-      - name: Download userscript
-        run: |
-          New-Item -ItemType Directory -Force _pake/userscript
-          Invoke-WebRequest `
-            -Uri https://raw.githubusercontent.com/fairy-root/youtube-adblock/main/youtubeadblock.js `
-            -OutFile _pake/userscript/youtubeadblock.js
-
       - name: Build Pake app
         working-directory: _pake
         run: |
-          npx pake https://www.youtube.com --name YouTube-AdBlock --targets x86_64-pc-windows-msvc --inject userscript/youtubeadblock.js
+          npx pake https://www.kimi.com --name Kimi-K2 --targets x86_64-pc-windows-msvc 
 
       - name: Find and rename MSI
         shell: pwsh
@@ -52,5 +45,5 @@ jobs:
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
-          name: youtube-adblock-x64
-          path: youtube-adblock-x64.msi
+          name: kimi-k2-x64
+          path: kimi-k2x64.msi
