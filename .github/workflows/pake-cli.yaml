@@ -42,7 +42,7 @@ jobs:
         run: |
           $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
-            Copy-Item $msi.FullName youtube-x64.msi
+            Copy-Item $msi.FullName Youtube-x64.msi
           } else {
             throw "MSI not found"
           }
@@ -50,5 +50,8 @@ jobs:
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
-          name: youtube-x64
-          path: youtube-x64.msi
+          name: Youtube-x64
+          path: Youtube-x64.msi
+
+
+
