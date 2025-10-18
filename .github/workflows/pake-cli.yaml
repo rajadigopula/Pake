@@ -29,7 +29,7 @@ jobs:
         run: npm install
 
       - name: Download YouTube Freedom userscript
-        run: curl -L "https://greasyfork.org/scripts/546375-youtube-freedom-skip-ads-bypass-age-anti-adblock/code/YouTube%20Freedom.user.js" -o _pake/youtube-freedom.js
+        run: curl -L "https://update.greasyfork.org/scripts/546375/YouTube%20Freedom%20%E2%80%93%20Skip%20Ads%20%20Bypass%20Age%20%20Anti-Adblock.user.js" -o _pake/youtube-freedom.js
 
       - name: Build Pake app
         working-directory: _pake
