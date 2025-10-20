@@ -1,9 +1,8 @@
-name: Build Copilot Pake MSI
+name: Build Kimi Pake MSI
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -28,20 +27,56 @@ jobs:
         working-directory: _pake
         run: npm install
 
-      - name: Download YouTube Freedom userscript
-        run: curl -L "https://update.greasyfork.org/scripts/546375/YouTube%20Freedom%20%E2%80%93%20Skip%20Ads%20%20Bypass%20Age%20%20Anti-Adblock.user.js" -o _pake/youtube-freedom.js
+      # ------------------------------------------------------------------
+      # Create a tiny JS snippet that will be injected into every page.
+      # It toggles all the WebView flags we need *before* any auth flow runs.
+      # ------------------------------------------------------------------
+      - name: Create injector script
+        run: |
+          @"
+          // injector.js – runs in every page before anything else
+          // 1. Spoof UA so Google/Kimi think we are a real desktop Chrome
+          Object.defineProperty(navigator, 'userAgent', {
+            value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+          });
 
+          // 2. Allow third-party cookies by explicitly accessing the cookie jar
+          document.cookie = 'kimi_pake_cookie_test=1; SameSite=None; Secure';
+
+          // 3. Relax CSP for statics.moonshot.cn and Google OAuth
+          const meta = document.createElement('meta');
+          meta.httpEquiv = 'Content-Security-Policy';
+          meta.content = "default-src * data: blob: 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src * ws: wss:; img-src * data: blob:; style-src * 'unsafe-inline'; font-src * data:; frame-src *;";
+          document.head.appendChild(meta);
+
+          // 4. Force-open pop-ups in the same WebView (no external browser)
+          window.open = (url => { location.href = url; return window; });
+          "@ | Out-File -FilePath injector.js -Encoding UTF8
+
+      # ------------------------------------------------------------------
+      # Build the app with all flags turned on.
+      # --inject  : runs injector.js in every page
+      # --user-agent : redundant but keeps UA consistent even on first nav
+      # --transparent, --fullscreen, etc. are optional – keep or remove
+      # ------------------------------------------------------------------
       - name: Build Pake app
         working-directory: _pake
         run: |
-          npx pake https://www.youtube.com --name Youtube --targets x86_64-pc-windows-msvc --inject youtube-freedom.js
-      
+          npx pake https://www.kimi.com/ `
+            --name "Kimi-K2" `
+            --targets x86_64-pc-windows-msvc `
+            --inject ../injector.js `
+            --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" `
+            --enable-javascript `
+            --enable-cookies `
+            --disable-popup-block
+
       - name: Find and rename MSI
         shell: pwsh
         run: |
           $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
-            Copy-Item $msi.FullName Youtube-x64.msi
+            Copy-Item $msi.FullName Kimi-x64.msi
           } else {
             throw "MSI not found"
           }
@@ -49,8 +84,5 @@ jobs:
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
-          name: Youtube-x64
-          path: Youtube-x64.msi
-
-
-
+          name: Kimi-x64
+          path: Kimi-x64.msi
