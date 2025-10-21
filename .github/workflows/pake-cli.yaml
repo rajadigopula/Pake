@@ -27,17 +27,15 @@ jobs:
         working-directory: _pake
         run: |
           # pake-cli is globally installed in node_modules\pake-cli
-          npm install --no-save @tauri-apps/api@2.8.1
-          npm install --no-save @tauri-apps/cli@2.8.2
-          # force node to resolve the down-level packages
-          npm ls @tauri-apps/api @tauri-apps/cli
-          
+          npm install --no-save @tauri-apps/api
+          npm install --no-save @tauri-apps/cli
+
       - name: Align Tauri versions
-        working-directory: _pake/src-tauri   # <-- real Rust project
+        working-directory: _pake/src-tauri
         run: |
-          npm install @tauri-apps/api@2.8.1 --save-exact
-          npm install --save-dev @tauri-apps/cli@2.8.2
-          cargo update -p tauri --precise 2.8.5
+          npm install @tauri-apps/api --save-exact
+          npm install --save-dev @tauri-apps/cli
+          cargo update -p tauri --precise
           
       - name: Install Pake deps
         working-directory: _pake
