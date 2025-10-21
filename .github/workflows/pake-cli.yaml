@@ -1,20 +1,16 @@
 name: Build Google-AI-Studio Pake MSI
-
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
-
 jobs:
   build-win:
     runs-on: windows-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
-
       - name: Install Node 20
         uses: actions/setup-node@v4
         with:
@@ -22,8 +18,7 @@ jobs:
        
       - name: Clone Pake
         run: git clone https://github.com/tw93/pake.git _pake
-
-      - name: Patch pake-cli’s internal deps
+      - name: Patch pake-cli's internal deps
         working-directory: _pake
         run: |
           # Install correct npm versions
@@ -35,17 +30,15 @@ jobs:
         run: |
           npm install @tauri-apps/api@2.9.0 --save-exact
           npm install --save-dev @tauri-apps/cli@2.8.2
-          cargo update -p tauri --exact 2.8.5  # ← Corrected here
+          cargo update -p tauri --precise 2.8.5
           
       - name: Install Pake deps
         working-directory: _pake
         run: npm install
-
       - name: Build Pake app
         working-directory: _pake
         run: |
           npx pake https://aistudio.google.com/prompts/new_chat --name Google-AI-Studio --targets x86_64-pc-windows-msvc
-
       - name: Find and rename MSI
         shell: pwsh
         run: |
@@ -55,7 +48,6 @@ jobs:
           } else {
             throw "MSI not found"
           }
-
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
