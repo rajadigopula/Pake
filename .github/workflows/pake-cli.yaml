@@ -24,10 +24,10 @@ jobs:
         run: git clone https://github.com/tw93/pake.git _pake
 
       - name: Align Tauri versions
-        working-directory: _pake
+        working-directory: _pake/src-tauri   # <-- real Rust project
         run: |
-          npm install @tauri-apps/api@2.8.5 --save-exact
-          npm install --save-dev @tauri-apps/cli@2.8.5   # add this line
+          npm install @tauri-apps/api@2.8.1 --save-exact
+          npm install --save-dev @tauri-apps/cli@2.8.2
           cargo update -p tauri --precise 2.8.5
           
       - name: Install Pake deps
