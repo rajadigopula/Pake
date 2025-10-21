@@ -1,4 +1,4 @@
-name: Build Kimi Pake MSI
+name: Build Google-AI-Studio Pake MSI
 
 on:
   push:
@@ -27,49 +27,17 @@ jobs:
         working-directory: _pake
         run: npm install
 
-      # ------------------------------------------------------------------
-      # Create a single JS file that runs in every page and applies
-      # all the work-arounds we need (UA, cookies, CSP, pop-ups).
-      # ------------------------------------------------------------------
-      - name: Create injector.js
-        run: |
-          @"
-          // 1. Spoof Chrome 124 Win64 UA
-          Object.defineProperty(navigator, 'userAgent', {
-            value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            configurable: false
-          });
-
-          // 2. Force third-party cookies by touching the jar early
-          document.cookie = 'kimi_pake_init=1; SameSite=None; Secure';
-
-          // 3. Relax CSP so statics.moonshot.cn and Google OAuth load
-          const meta = document.createElement('meta');
-          meta.httpEquiv = 'Content-Security-Policy';
-          meta.content = "default-src * data: blob: 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src * ws: wss:; img-src * data: blob:; style-src * 'unsafe-inline'; font-src * data:; frame-src *;";
-          if (document.head) document.head.appendChild(meta);
-
-          // 4. Override window.open so OAuth pop-ups stay inside the same WebView
-          window.open = (url => { location.href = url; return window; });
-          "@ | Out-File -FilePath injector.js -Encoding UTF8
-
-      # ------------------------------------------------------------------
-      # Build with ONLY flags that the current NPM binary understands.
-      # ------------------------------------------------------------------
       - name: Build Pake app
         working-directory: _pake
         run: |
-          npx pake https://www.kimi.com/ `
-            --name "Kimi-K2" `
-            --targets x86_64-pc-windows-msvc `
-            --inject ../injector.js
+          npx pake https://aistudio.google.com/prompts/new_chat --name Google-AI-Studio --targets x86_64-pc-windows-msvc
 
       - name: Find and rename MSI
         shell: pwsh
         run: |
           $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
-            Copy-Item $msi.FullName Kimi-x64.msi
+            Copy-Item $msi.FullName Google-AI-Studio-x64.msi
           } else {
             throw "MSI not found"
           }
@@ -77,5 +45,5 @@ jobs:
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
-          name: Kimi-x64
-          path: Kimi-x64.msi
+          name: Google-AI-Studio-x64
+          path: Google-AI-Studio-x64.msi
