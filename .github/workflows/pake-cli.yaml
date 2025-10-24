@@ -26,12 +26,13 @@ jobs:
           
       - name: Align Tauri versions
         working-directory: _pake/src-tauri
+        shell: pwsh
         run: |
-          rm -f Cargo.lock
+          Remove-Item -Path Cargo.lock -Force -ErrorAction SilentlyContinue
           npm install @tauri-apps/api@2.8.0 --save-exact
           npm install --save-dev @tauri-apps/cli@2.8.2
-          sed -i 's/"2\.5\.0"/"2.0.4"/' Cargo.toml
-          sed -i 's/"2\.9\.0"/"2.8.5"/' Cargo.toml
+          (Get-Content Cargo.toml) -replace '"2\.5\.0"', '"2.0.4"' | Set-Content Cargo.toml
+          (Get-Content Cargo.toml) -replace '"2\.9\.0"', '"2.8.5"' | Set-Content Cargo.toml
           cargo update
           
       - name: Install Pake deps
