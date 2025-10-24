@@ -30,6 +30,7 @@ jobs:
         run: |
           npm install @tauri-apps/api@2.9.0 --save-exact
           npm install --save-dev @tauri-apps/cli@2.8.2
+          sed -i 's/"2\.5\.0"/"2.0.4"/' Cargo.toml
           cargo update -p tauri --precise 2.8.5
           cargo update -p tauri-build --precise 2.0.4
           
