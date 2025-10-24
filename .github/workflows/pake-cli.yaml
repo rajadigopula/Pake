@@ -38,33 +38,29 @@ jobs:
       - name: Install Pake deps
         working-directory: _pake
         run: npm install
-      - name: Build Pake app
-        working-directory: _pake
-        run: |
-          npx pake https://lightning.ai/rajadigopula/home --name Lightning-AI-Studio --targets x86_64-pc-windows-msvc
-      
+  
       - name: Download YouTube Freedom userscript
         run: curl -L "https://raw.githubusercontent.com/goodtube4u/goodtube/refs/heads/main/goodtube.js" -o _pake/goodtube.js
 
       - name: Build Pake app
         working-directory: _pake
         run: |
-          npx pake https://www.youtube.com --name Youtube --targets x86_64-pc-windows-msvc --inject goodtube.js
+          npx pake https://www.youtube.com --name Youtube-GT --targets x86_64-pc-windows-msvc --inject goodtube.js
       
       - name: Find and rename MSI
         shell: pwsh
         run: |
           $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
-            Copy-Item $msi.FullName Youtube-x64.msi
+            Copy-Item $msi.FullName Youtube-GT-x64.msi
           } else {
             throw "MSI not found"
           }
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
-          name: Youtube-x64
-          path: Youtube-x64.msi
+          name: Youtube-GT-x64
+          path: Youtube-GT-x64.msi
 
 
 
