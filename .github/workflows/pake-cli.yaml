@@ -1,4 +1,4 @@
-name: Build Google-AI-Studio Pake MSI
+name: Build Lightning AI Studio Pake MSI
 on:
   push:
     branches: [ main ]
@@ -38,18 +38,22 @@ jobs:
       - name: Build Pake app
         working-directory: _pake
         run: |
-          npx pake https://aistudio.google.com/prompts/new_chat --name Google-AI-Studio --targets x86_64-pc-windows-msvc
+          npx pake https://lightning.ai/rajadigopula/home --name Lightning-AI-Studio --targets x86_64-pc-windows-msvc
       - name: Find and rename MSI
         shell: pwsh
         run: |
           $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
-            Copy-Item $msi.FullName Google-AI-Studio-x64.msi
+            Copy-Item $msi.FullName Lightning-AI-Studio-x64.msi
           } else {
             throw "MSI not found"
           }
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
-          name: Google-AI-Studio-x64
-          path: Google-AI-Studio-x64.msi
+          name: Lightning-AI-Studio-x64
+          path: Lightning-AI-Studio-x64.msi
+
+
+
+
