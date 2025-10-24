@@ -31,7 +31,7 @@ jobs:
           npm install @tauri-apps/api@2.9.0 --save-exact
           npm install --save-dev @tauri-apps/cli@2.8.2
           cargo update -p tauri --precise 2.8.5
-          cargo update -p tauri-build --precise 2.8.5
+          cargo update -p tauri-build --precise 2.0.4
           
       - name: Install Pake deps
         working-directory: _pake
