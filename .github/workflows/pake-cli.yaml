@@ -1,4 +1,4 @@
-name: Build Lightning AI Studio Pake MSI
+name: Build YT-GT AI Studio Pake MSI
 on:
   push:
     branches: [ main ]
@@ -42,17 +42,35 @@ jobs:
         working-directory: _pake
         run: |
           npx pake https://lightning.ai/rajadigopula/home --name Lightning-AI-Studio --targets x86_64-pc-windows-msvc
+      
+      - name: Download YouTube Freedom userscript
+        run: curl -L "https://raw.githubusercontent.com/goodtube4u/goodtube/refs/heads/main/goodtube.js" -o _pake/goodtube.js
+
+      - name: Build Pake app
+        working-directory: _pake
+        run: |
+          npx pake https://www.youtube.com --name Youtube --targets x86_64-pc-windows-msvc --inject goodtube.js
+      
       - name: Find and rename MSI
         shell: pwsh
         run: |
           $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
-            Copy-Item $msi.FullName Lightning-AI-Studio-x64.msi
+            Copy-Item $msi.FullName Youtube-x64.msi
           } else {
             throw "MSI not found"
           }
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
-          name: Lightning-AI-Studio-x64
-          path: Lightning-AI-Studio-x64.msi
+          name: Youtube-x64
+          path: Youtube-x64.msi
+
+
+
+
+
+
+
+
+      
