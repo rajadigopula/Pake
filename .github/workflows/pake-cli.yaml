@@ -21,14 +21,13 @@ jobs:
       - name: Patch pake-cli's internal deps
         working-directory: _pake
         run: |
-          # Install correct npm versions (matching 2.8.x)
-            npm i -E @tauri-apps/api@2.8.0
-            npm i -D -E @tauri-apps/cli@2.8.2
+          npm i -E @tauri-apps/api@2.8.0
+          npm i -D -E @tauri-apps/cli@2.8.2
           
       - name: Align Tauri versions
         working-directory: _pake/src-tauri
         run: |
-          npm install @tauri-apps/api@2.9.0 --save-exact
+          npm install @tauri-apps/api@2.8.0 --save-exact
           npm install --save-dev @tauri-apps/cli@2.8.2
           sed -i 's/"2\.5\.0"/"2.0.4"/' Cargo.toml
           cargo update -p tauri --precise 2.8.5
@@ -55,7 +54,3 @@ jobs:
         with:
           name: Lightning-AI-Studio-x64
           path: Lightning-AI-Studio-x64.msi
-
-
-
-
