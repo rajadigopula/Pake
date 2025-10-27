@@ -1,4 +1,4 @@
-name: Build Pinnterest Pake MSI
+name: Build HuggingChat Pake MSI
 on:
   push:
     branches: [ main ]
@@ -39,28 +39,25 @@ jobs:
         working-directory: _pake
         run: npm install
   
-      - name: Download YouTube Freedom userscript
-        run: curl -L "https://github.com/rajadigopula/Pake/raw/refs/heads/main/Declutter-Pinterest.js" -o _pake/pinterest.js
-
       - name: Build Pake app
         working-directory: _pake
         run: |
-          npx pake https://pinterest.com --name Pinterest --targets x86_64-pc-windows-msvc --inject pinterest.js
+          npx pake https://huggingface.co/chat --name HuggingChat --targets x86_64-pc-windows-msvc
       
       - name: Find and rename MSI
         shell: pwsh
         run: |
           $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
-            Copy-Item $msi.FullName Pintrest-x64.msi
+            Copy-Item $msi.FullName HuggingChat-x64.msi
           } else {
             throw "MSI not found"
           }
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
-          name: Pintrest-x64
-          path: Pintrest-x64.msi
+          name: HuggingChat-x64
+          path: HuggingChat-x64.msi
 
 
 
