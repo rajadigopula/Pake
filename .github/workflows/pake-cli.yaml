@@ -1,4 +1,4 @@
-name: Build OS-Chat Pake MSI
+name: Build ClipGrid Pake MSI
 on:
   push:
     branches: [ main ]
@@ -42,22 +42,22 @@ jobs:
       - name: Build Pake app
         working-directory: _pake
         run: |
-          npx pake https://os-chat.pages.dev/ --name OS-Chat --targets x86_64-pc-windows-msvc
+          npx pake https://clipgrid.pages.dev/ --name ClipGrid --targets x86_64-pc-windows-msvc
       
       - name: Find and rename MSI
         shell: pwsh
         run: |
           $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
-            Copy-Item $msi.FullName OS-Chat-x64.msi
+            Copy-Item $msi.FullNameClipGrid-x64.msi
           } else {
             throw "MSI not found"
           }
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
-          name: OS-Chat-x64
-          path: OS-Chat-x64.msi
+          name: ClipGrid-x64
+          path: ClipGrid-x64.msi
 
 
 
