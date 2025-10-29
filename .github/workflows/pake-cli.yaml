@@ -49,7 +49,7 @@ jobs:
         run: |
           $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
-            Copy-Item $msi.FullNameClipGrid-x64.msi
+            Copy-Item $msi.FullName ClipGrid-x64.msi
           } else {
             throw "MSI not found"
           }
