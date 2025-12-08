@@ -1,29 +1,34 @@
-name: Build ClipGrid Pake MSI
+name: Build YT-GT AI Studio Pake MSI
+
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
+
 jobs:
   build-win:
     runs-on: windows-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+
       - name: Install Node 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
-       
+
       - name: Clone Pake
         run: git clone https://github.com/tw93/pake.git _pake
+
       - name: Patch pake-cli's internal deps
         working-directory: _pake
         run: |
           npm i -E @tauri-apps/api@2.9.1
           npm i -D -E @tauri-apps/cli@2.9.1
-          
+
       - name: Align Tauri versions
         working-directory: _pake/src-tauri
         shell: pwsh
@@ -34,36 +39,45 @@ jobs:
           (Get-Content Cargo.toml) -replace '"2\.5\.0"', '"2.5.0"' | Set-Content Cargo.toml
           (Get-Content Cargo.toml) -replace '"2\.8\.5"', '"2.9.1"' | Set-Content Cargo.toml
           cargo update
-          
+
       - name: Install Pake deps
         working-directory: _pake
         run: npm install
-  
-      - name: Build Pake app
+
+      - name: Download YouTube Freedom userscript
+        run: |
+          curl -L "https://raw.githubusercontent.com/goodtube4u/goodtube/refs/heads/main/goodtube.js" -o _pake/goodtube.js
+
+      # ---------- NEW: cache WebView2 profile between runs ----------
+      - name: Cache WebView2 user-data folder
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\Temp\pake-webview-cache
+          key: webview2-cache-${{ runner.os }}-${{ hashFiles('_pake/goodtube.js') }}
+          restore-keys: webview2-cache-${{ runner.os }}-
+      # --------------------------------------------------------------
+
+      - name: Build Pake app  (with WebView2 speed flags)
         working-directory: _pake
         run: |
-          npx pake https://clipgrid.pages.dev/ --name ClipGrid --targets x86_64-pc-windows-msvc
-      
+          npx pake https://www.youtube.com ^
+            --name Youtube-GT ^
+            --targets x86_64-pc-windows-msvc ^
+            --inject goodtube.js ^
+            --options "--disable-background-timer-throttling --disable-backgrounding-occluded-windows --user-data-dir=%TEMP%\pake-webview-cache"
+
       - name: Find and rename MSI
         shell: pwsh
         run: |
           $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
-            Copy-Item $msi.FullName ClipGrid-x64.msi
+            Copy-Item $msi.FullName Youtube-GT-x64.msi
           } else {
             throw "MSI not found"
           }
+
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
-          name: ClipGrid-x64
-          path: ClipGrid-x64.msi
-
-
-
-
-
-
-
-
-      
+          name: Youtube-GT-x64
+          path: Youtube-GT-x64.msi
