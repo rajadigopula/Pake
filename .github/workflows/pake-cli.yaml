@@ -59,13 +59,12 @@ jobs:
 
       - name: Build Pake app  (with WebView2 speed flags)
         working-directory: _pake
-        run: |
-          npx pake https://www.youtube.com ^
-            --name Youtube-GT ^
-            --targets x86_64-pc-windows-msvc ^
-            --inject goodtube.js ^
-            --options "--disable-background-timer-throttling --disable-backgrounding-occluded-windows --user-data-dir=%TEMP%\pake-webview-cache"
-
+        run: >
+          npx pake https://www.youtube.com
+          --name Youtube-GT
+          --targets x86_64-pc-windows-msvc
+          --inject goodtube.js
+          --options "--disable-background-timer-throttling --disable-backgrounding-occluded-windows --user-data-dir=%TEMP%\pake-webview-cache"
       - name: Find and rename MSI
         shell: pwsh
         run: |
