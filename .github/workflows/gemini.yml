@@ -35,65 +35,38 @@ jobs:
         run: cargo update
 
       # -----------------------------------------------------------------------
-      # PATCH TAURI CONFIG TO REMOVE MENU BAR (As in the original)
-      # -----------------------------------------------------------------------
-
-      # -----------------------------------------------------------------------
-      # APPLY LOW-SPEC WEBVIEW2 SETTINGS (As in the original)
+      # APPLY LOW-SPEC WEBVIEW2 SETTINGS
       # -----------------------------------------------------------------------
       - name: Apply Low-Spec WebView2 settings
         working-directory: _pake
         shell: pwsh
         run: |
-          # Set WebView2 arguments for low-spec or power-saving devices
           $regRoot = "HKCU:\Software\Microsoft\EdgeUpdate\ClientState\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
           if (!(Test-Path $regRoot)) { New-Item -Path $regRoot -Force | Out-Null }
-          Set-ItemProperty -Path $regRoot -Name "AdditionalBrowserArguments" `
-            -Value "--disable-smooth-scrolling --disable-gpu-vsync" `
-            -Type String -Force
-
-          # Set Node memory limit for Tauri build process
+          Set-ItemProperty -Path $regRoot -Name "AdditionalBrowserArguments" -Value "--disable-smooth-scrolling --disable-gpu-vsync" -Type String -Force
           Add-Content -Path src-tauri/.env -Value "TAURI_DEV_ARGS=--js-flags=--max-old-space-size=256"
 
-      - name: Build Pake app (Using CLI Flags)
+      # -----------------------------------------------------------------------
+      # BUILD PAKE APP
+      # NOTE: Using single line command to prevent PowerShell parsing errors.
+      # -----------------------------------------------------------------------
+      - name: Build Pake app
         working-directory: _pake
         shell: pwsh
+        run: npx pake https://gemini.google.com/ --name Gemini-AI-Studio --targets x86_64-pc-windows-msvc --icon ./src-tauri/icons/icon.ico --width 1100 --height 750
+
+      # -----------------------------------------------------------------------
+      # COLLECT & UPLOAD MSI
+      # -----------------------------------------------------------------------
+      - name: Find and rename MSI
+        shell: pwsh
         run: |
-          npx pake https://gemini.google.com/ `
-            --name Gemini-AI-Studio `
-            --targets x86_64-pc-windows-msvc `
-            --icon ./src-tauri/icons/icon.ico `
-            --width 1100 `
-            --height 750 `
-            --borderless # This should set decorations: false and titleBarStyle: hiddenldItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
+          $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
             Copy-Item $msi.FullName Gemini-AI-Studio-x64.msi
           } else {
             throw "MSI not found."
           }
-
-      # -----------------------------------------------------------------------
-      # COLLECT & UPLOAD MSI
-      # -----------------------------------------------------------------------
-# -----------------------------------------------------------------------
-      # COLLECT & UPLOAD MSI
-      # -----------------------------------------------------------------------
-      - name: Find and rename MSI (FIXED)
-        shell: pwsh
-        run: |
-          # Find the first MSI file recursively within the _pake directory
-          $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
-          
-          if ($msi) {
-            # Copy the found MSI to the root of the runner directory with the final name
-            Copy-Item $msi.FullName Gemini-AI-Studio-x64.msi
-          } else {
-            # Throw an error if the MSI was not found (meaning the build failed)
-            throw "MSI not found. Check the 'Build Pake app' step for errors."
-          }
-      # BUILD PAKE APP - TARGETING GEMINI URL (Using Pake borderless flag)
-      # -----------------------------------------------------------------------
-
 
       - name: Upload MSI
         uses: actions/upload-artifact@v4
