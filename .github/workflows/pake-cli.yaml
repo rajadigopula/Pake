@@ -35,7 +35,7 @@ jobs:
         run: cargo update
 
       # -----------------------------------------------------------------------
-      # STEP: DOWNLOAD AND OPTIMIZE USERSCRIPT (CSS/JS INJECTION)
+      # DOWNLOAD & PATCH GOODTUBE USERSCRIPT (CSS/JS INJECTION)
       # -----------------------------------------------------------------------
       - name: Download & Patch GoodTube
         working-directory: _pake
@@ -43,83 +43,73 @@ jobs:
         run: |
           # 1. Download original script
           curl -L "https://raw.githubusercontent.com/goodtube4u/goodtube/refs/heads/main/goodtube.js" -o goodtube.js
-          
-          # 2. Append CSS to KILL Ambient Mode and Animations (Huge GPU Savers)
-          # We inject a DOM style element at the end of the script
-          $optimizationCode = @"
-          
+
+          # 2. Append CSS to kill ambient mode and heavy animations
+          $optimizationCode = @'
+
           // --- PAKE OPTIMIZATION INJECTION ---
           document.addEventListener('DOMContentLoaded', () => {
             const style = document.createElement('style');
-            style.innerHTML = \`
-              /* KILL AMBIENT MODE (The #1 GPU Hog) */
+            style.innerHTML = `
+              /* KILL AMBIENT MODE (#1 GPU Hog) */
               #cinematics, ytd-watch-flexy[theater] #player-container-inner::before { display: none !important; }
-              
+
               /* Disable hover animations on thumbnails */
               ytd-thumbnail a #mouseover-overlay { display: none !important; }
-              
+
               /* Reduce transparency effects on sidebars */
               #guide-content, #masthead-container { backdrop-filter: none !important; background: #0f0f0f !important; }
-              
+
               /* Disable heavy blur effects */
               .ytp-cued-thumbnail-overlay-image { filter: none !important; }
-            \`;
+            `;
             document.head.appendChild(style);
             console.log('Pake Optimizations: Ambient mode and heavy effects disabled.');
           });
-          "@
-          
+          '@
           Add-Content -Path goodtube.js -Value $optimizationCode
 
       # -----------------------------------------------------------------------
-      # STEP: CONFIGURE SYSTEM & WEBVIEW2 FLAGS
+      # APPLY LOW-SPEC WEBVIEW2 SETTINGS (REGISTRY + TAURI CONF)
       # -----------------------------------------------------------------------
-      - name: Apply Low-Spec System Config
+      - name: Apply Low-Spec WebView2 settings
         working-directory: _pake
         shell: pwsh
         run: |
-          # 1. OPTIMIZE TAURI CONFIG
+          # 1. Runtime-wide WebView2 flags (user-level, safe)
+          $regRoot = "HKCU:\Software\Microsoft\EdgeUpdate\ClientState\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+          if (!(Test-Path $regRoot)) { New-Item -Path $regRoot -Force | Out-Null }
+          Set-ItemProperty -Path $regRoot -Name "AdditionalBrowserArguments" -Value "--disable-smooth-scrolling --disable-gpu-vsync" -Type String -Force
+
+          # 2. Tauri window: no transparency, smaller initial size
           $configPath = "src-tauri/tauri.conf.json"
           $json = Get-Content $configPath | ConvertFrom-Json
-          
-          # Disable transparency (Expensive on iGPU)
-          if ($json.tauri.windows) {
-            $json.tauri.windows[0].transparent = $false
-            $json.tauri.windows[0].decorations = $true
-          }
-          
-          # Save config
+          $json.tauri.windows[0].transparent = $false
+          $json.tauri.windows[0].width  = 1100
+          $json.tauri.windows[0].height = 650
           $json | ConvertTo-Json -Depth 10 | Set-Content $configPath
 
-          # 2. INJECT EFFICIENCY FLAGS
-          # We use flags specifically designed for low-end devices and battery saving
-          $rsPath = "src-tauri/src/main.rs"
-          $rsContent = Get-Content $rsPath -Raw
-          
-          # Flags Explanation:
-          # --enable-low-end-device-mode: Reduces memory usage and raster threads.
-          # --disable-smooth-scrolling: Removes scroll lag/GPU spikes.
-          # --disable-background-networking: Stops non-critical background fetches.
-          # --enable-features=PowerThrottling: Allows Windows to put the app in "Eco" mode.
-          # --disable-features=msSmartScreenProtection: Removes overhead.
-          
-          $flags = '"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--enable-low-end-device-mode --disable-smooth-scrolling --disable-background-networking --enable-features=PowerThrottling --disable-features=msSmartScreenProtection"'
-          
-          $injection = "std::env::set_var($flags); tauri::Builder::default()"
-          $newContent = $rsContent -replace 'tauri::Builder::default\(\)', $injection
-          Set-Content $rsPath $newContent
+          # 3. Optional: limit JS heap (V8) – does not need WebView2 switch
+          $envFile = "src-tauri/.env"
+          Add-Content -Path $envFile -Value "TAURI_DEV_ARGS=--js-flags=--max-old-space-size=256"
 
+      # -----------------------------------------------------------------------
+      # BUILD PAKE APP
+      # -----------------------------------------------------------------------
       - name: Build Pake app
         working-directory: _pake
         shell: pwsh
         run: |
-          $inject = Resolve-Path goodtube.js        # ← absolute path
+          $inject = Resolve-Path goodtube.js   # absolute path required by pake
           npx pake https://www.youtube.com `
             --name Youtube-GT `
             --targets x86_64-pc-windows-msvc `
             --icon ./src-tauri/icons/icon.ico `
             --inject "$inject"
 
+      # -----------------------------------------------------------------------
+      # COLLECT & UPLOAD MSI
+      # -----------------------------------------------------------------------
       - name: Find and rename MSI
         shell: pwsh
         run: |
