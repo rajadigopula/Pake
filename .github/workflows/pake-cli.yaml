@@ -35,52 +35,84 @@ jobs:
         run: cargo update
 
       # -----------------------------------------------------------------------
-      # NEW STEP: HARDCORE OPTIMIZATION FOR LOW-END INTEL PC
+      # STEP: DOWNLOAD AND OPTIMIZE USERSCRIPT (CSS/JS INJECTION)
       # -----------------------------------------------------------------------
-      - name: Inject High-Performance Optimizations
+      - name: Download & Patch GoodTube
         working-directory: _pake
         shell: pwsh
         run: |
-          # 1. OPTIMIZE TAURI CONFIG (Disable Transparency & Custom Effects)
+          # 1. Download original script
+          curl -L "https://raw.githubusercontent.com/goodtube4u/goodtube/refs/heads/main/goodtube.js" -o goodtube.js
+          
+          # 2. Append CSS to KILL Ambient Mode and Animations (Huge GPU Savers)
+          # We inject a DOM style element at the end of the script
+          $optimizationCode = @"
+          
+          // --- PAKE OPTIMIZATION INJECTION ---
+          document.addEventListener('DOMContentLoaded', () => {
+            const style = document.createElement('style');
+            style.innerHTML = \`
+              /* KILL AMBIENT MODE (The #1 GPU Hog) */
+              #cinematics, ytd-watch-flexy[theater] #player-container-inner::before { display: none !important; }
+              
+              /* Disable hover animations on thumbnails */
+              ytd-thumbnail a #mouseover-overlay { display: none !important; }
+              
+              /* Reduce transparency effects on sidebars */
+              #guide-content, #masthead-container { backdrop-filter: none !important; background: #0f0f0f !important; }
+              
+              /* Disable heavy blur effects */
+              .ytp-cued-thumbnail-overlay-image { filter: none !important; }
+            \`;
+            document.head.appendChild(style);
+            console.log('Pake Optimizations: Ambient mode and heavy effects disabled.');
+          });
+          "@
+          
+          Add-Content -Path goodtube.js -Value $optimizationCode
+
+      # -----------------------------------------------------------------------
+      # STEP: CONFIGURE SYSTEM & WEBVIEW2 FLAGS
+      # -----------------------------------------------------------------------
+      - name: Apply Low-Spec System Config
+        working-directory: _pake
+        shell: pwsh
+        run: |
+          # 1. OPTIMIZE TAURI CONFIG
           $configPath = "src-tauri/tauri.conf.json"
           $json = Get-Content $configPath | ConvertFrom-Json
           
-          # Disable transparency (Huge GPU saver)
+          # Disable transparency (Expensive on iGPU)
           if ($json.tauri.windows) {
             $json.tauri.windows[0].transparent = $false
             $json.tauri.windows[0].decorations = $true
           }
           
-          # Save the optimized config
+          # Save config
           $json | ConvertTo-Json -Depth 10 | Set-Content $configPath
-          Write-Host "Configuration patched: Transparency DISABLED, Native Decorations ENABLED."
 
-          # 2. INJECT WEBVIEW2 FLAGS VIA RUST (Force Hardware Acceleration)
-          # We inject an environment variable setting into main.rs before the app starts.
+          # 2. INJECT EFFICIENCY FLAGS
+          # We use flags specifically designed for low-end devices and battery saving
           $rsPath = "src-tauri/src/main.rs"
           $rsContent = Get-Content $rsPath -Raw
           
-          # The flags:
-          # --ignore-gpu-blocklist: Use GPU even if old Intel driver
-          # --enable-gpu-rasterization: Paint using GPU
-          # --enable-zero-copy: Save RAM by not copying video buffers
-          # --disable-features=msSmartScreenProtection: Save CPU overhead
-          $flags = '"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--ignore-gpu-blocklist --enable-gpu-rasterization --enable-zero-copy --disable-features=msSmartScreenProtection"'
-          $injection = "std::env::set_var($flags); tauri::Builder::default()"
+          # Flags Explanation:
+          # --enable-low-end-device-mode: Reduces memory usage and raster threads.
+          # --disable-smooth-scrolling: Removes scroll lag/GPU spikes.
+          # --disable-background-networking: Stops non-critical background fetches.
+          # --enable-features=PowerThrottling: Allows Windows to put the app in "Eco" mode.
+          # --disable-features=msSmartScreenProtection: Removes overhead.
           
-          # Replace the standard builder line with our optimized one
+          $flags = '"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--enable-low-end-device-mode --disable-smooth-scrolling --disable-background-networking --enable-features=PowerThrottling --disable-features=msSmartScreenProtection"'
+          
+          $injection = "std::env::set_var($flags); tauri::Builder::default()"
           $newContent = $rsContent -replace 'tauri::Builder::default\(\)', $injection
           Set-Content $rsPath $newContent
-          Write-Host "Rust code patched: Hardware acceleration flags injected."
-
-      - name: Download YouTube Freedom userscript
-        run: |
-          curl -L "https://raw.githubusercontent.com/goodtube4u/goodtube/refs/heads/main/goodtube.js" -o _pake/goodtube.js
 
       - name: Build Pake app
         working-directory: _pake
         shell: cmd
-        # Note: We do not need to pass flags here because we injected them into the code above.
+        # Note: Previous user flags removed. We rely on the Rust injection above.
         run: |
           npx pake https://www.youtube.com ^
             --name Youtube-GT ^
@@ -96,7 +128,7 @@ jobs:
             Write-Host "Found MSI: $($msi.FullName)"
             Copy-Item $msi.FullName Youtube-GT-x64.msi
           } else {
-            throw "MSI not found. Build may have failed."
+            throw "MSI not found."
           }
 
       - name: Upload MSI
