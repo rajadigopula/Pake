@@ -35,6 +35,21 @@ jobs:
         run: cargo update
 
       # -----------------------------------------------------------------------
+      # PATCH Tauri CONFIG TO REMOVE MENU BAR
+      # -----------------------------------------------------------------------
+      - name: Patch Tauri Config for No Menu Bar
+        shell: pwsh
+        run: |
+          $configPath = "_pake/src-tauri/tauri.conf.json"
+          $config = Get-Content $configPath -Raw
+          $patched = $config -replace '"windows":\s*
+
+\[.*?\]
+
+,' , '"windows": [ { "fullscreen": false, "decorations": false, "resizable": true, "titleBarStyle": "hidden", "alwaysOnTop": false } ],'
+          Set-Content -Path $configPath -Value $patched
+
+      # -----------------------------------------------------------------------
       # DOWNLOAD & PATCH GOODTUBE USERSCRIPT (CSS/JS INJECTION)
       # -----------------------------------------------------------------------
       - name: Download & Patch GoodTube
@@ -48,41 +63,44 @@ jobs:
           document.addEventListener('DOMContentLoaded', () => {
             const style = document.createElement('style');
             style.innerHTML = `
-              /* KILL AMBIENT MODE (#1 GPU Hog) */
               #cinematics, ytd-watch-flexy[theater] #player-container-inner::before { display: none !important; }
-              /* Disable hover animations */
               ytd-thumbnail a #mouseover-overlay { display: none !important; }
-              /* Reduce transparency effects */
               #guide-content, #masthead-container { backdrop-filter: none !important; background: #0f0f0f !important; }
-              /* Disable heavy blur */
               .ytp-cued-thumbnail-overlay-image { filter: none !important; }
             `;
             document.head.appendChild(style);
+
+            document.addEventListener('fullscreenchange', () => {
+              if (document.fullscreenElement) {
+                document.body.style.margin = '0';
+                document.body.style.padding = '0';
+                document.documentElement.style.overflow = 'hidden';
+              }
+            });
+
             console.log('Pake Optimizations: Ambient mode and heavy effects disabled.');
           });
           '@
           Add-Content -Path goodtube.js -Value $optimizationCode
 
       # -----------------------------------------------------------------------
-      # APPLY LOW-SPEC WEBVIEW2 SETTINGS (REGISTRY + ENV)
+      # APPLY LOW-SPEC WEBVIEW2 SETTINGS
       # -----------------------------------------------------------------------
       - name: Apply Low-Spec WebView2 settings
         working-directory: _pake
         shell: pwsh
         run: |
-          # 1. Runtime-wide WebView2 flags (user-level, safe)
           $regRoot = "HKCU:\Software\Microsoft\EdgeUpdate\ClientState\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
           if (!(Test-Path $regRoot)) { New-Item -Path $regRoot -Force | Out-Null }
           Set-ItemProperty -Path $regRoot -Name "AdditionalBrowserArguments" `
                            -Value "--disable-smooth-scrolling --disable-gpu-vsync" `
                            -Type String -Force
 
-          # 2. Optional: limit JS heap (V8)
           $envFile = "src-tauri/.env"
           Add-Content -Path $envFile -Value "TAURI_DEV_ARGS=--js-flags=--max-old-space-size=256"
 
       # -----------------------------------------------------------------------
-      # BUILD PAKE APP (USING ONLY DOCUMENTED CLI OPTIONS)
+      # BUILD PAKE APP
       # -----------------------------------------------------------------------
       - name: Build Pake app
         working-directory: _pake
