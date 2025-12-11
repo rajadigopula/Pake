@@ -37,11 +37,24 @@ jobs:
       # -----------------------------------------------------------------------
       # PATCH TAURI CONFIG TO REMOVE MENU BAR (As in the original)
       # -----------------------------------------------------------------------
-      - name: Patch Tauri Config
+# -----------------------------------------------------------------------
+      # PATCH TAURI CONFIG TO REMOVE MENU BAR (CORRECTED)
+      # -----------------------------------------------------------------------
+      - name: Patch Tauri Config (FIXED)
         shell: pwsh
         run: |
           $configPath = "_pake/src-tauri/tauri.conf.json"
+          
+          # Read and convert the JSON file
           $json = Get-Content $configPath -Raw | ConvertFrom-Json
+          
+          # Ensure the 'tauri' object exists (it usually does)
+          if (-not $json.tauri) {
+              $json | Add-Member -MemberType NoteProperty -Name tauri -Value @{}
+          }
+
+          # Assign the new 'windows' array to the 'tauri' object
+          # This overwrites any existing window definition with your desired settings
           $json.tauri.windows = @(@{
             fullscreen = $false
             decorations = $false
@@ -49,8 +62,10 @@ jobs:
             titleBarStyle = "hidden"
             alwaysOnTop = $false
           })
+          
+          # Write the modified JSON back to the file
+          # The -Depth 10 ensures all nested properties are preserved
           $json | ConvertTo-Json -Depth 10 | Set-Content $configPath
-
       # -----------------------------------------------------------------------
       # APPLY LOW-SPEC WEBVIEW2 SETTINGS (As in the original)
       # -----------------------------------------------------------------------
