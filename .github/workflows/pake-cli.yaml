@@ -8,6 +8,9 @@ on:
 jobs:
   build-win:
     runs-on: windows-latest
+    permissions:
+      contents: read
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -15,64 +18,47 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Node 20
+      - name: Install Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Clone Pake
         run: git clone https://github.com/tw93/pake.git _pake
 
-      - name: Patch pake-cli's internal deps
-        working-directory: _pake
-        run: |
-          npm i -E @tauri-apps/api@2.9.1
-          npm i -D -E @tauri-apps/cli@2.9.1
-
-      - name: Align Tauri versions
-        working-directory: _pake/src-tauri
-        shell: pwsh
-        run: |
-          Remove-Item -Path Cargo.lock -Force -ErrorAction SilentlyContinue
-          npm install @tauri-apps/api@2.9.1 --save-exact
-          npm install --save-dev @tauri-apps/cli@2.9.1
-          (Get-Content Cargo.toml) -replace '"2\.5\.0"', '"2.5.0"' | Set-Content Cargo.toml
-          (Get-Content Cargo.toml) -replace '"2\.8\.5"', '"2.9.1"' | Set-Content Cargo.toml
-          cargo update
-
-      - name: Install Pake deps
+      - name: Install Pake Dependencies
         working-directory: _pake
         run: npm install
+
+      # Updating Tauri dependencies via Cargo is safer than regex patching files
+      - name: Update Rust Dependencies
+        working-directory: _pake/src-tauri
+        run: cargo update
 
       - name: Download YouTube Freedom userscript
         run: |
           curl -L "https://raw.githubusercontent.com/goodtube4u/goodtube/refs/heads/main/goodtube.js" -o _pake/goodtube.js
 
-      # ---------- NEW: cache WebView2 profile between runs ----------
-      - name: Cache WebView2 user-data folder
-        uses: actions/cache@v4
-        with:
-          path: ~\AppData\Local\Temp\pake-webview-cache
-          key: webview2-cache-${{ runner.os }}-${{ hashFiles('_pake/goodtube.js') }}
-          restore-keys: webview2-cache-${{ runner.os }}-
-      # --------------------------------------------------------------
-
-      - name: Build Pake app  (with WebView2 speed flags)
+      - name: Build Pake app
         working-directory: _pake
-        run: >
-          npx pake https://www.youtube.com
-          --name Youtube-GT
-          --targets x86_64-pc-windows-msvc
-          --inject goodtube.js
-          --options "--disable-background-timer-throttling --disable-backgrounding-occluded-windows --user-data-dir=%TEMP%\pake-webview-cache"
+        # Removing --user-data-dir because hardcoding a temp path into the installer is not recommended.
+        # The installed app will automatically manage its own profile in AppData.
+        run: |
+          npx pake-cli https://www.youtube.com ^
+            --name Youtube-GT ^
+            --targets x86_64-pc-windows-msvc ^
+            --icon ./src-tauri/icons/icon.ico ^
+            --inject goodtube.js
+
       - name: Find and rename MSI
         shell: pwsh
         run: |
           $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
+            Write-Host "Found MSI: $($msi.FullName)"
             Copy-Item $msi.FullName Youtube-GT-x64.msi
           } else {
-            throw "MSI not found"
+            throw "MSI not found. Build may have failed or output to a different directory."
           }
 
       - name: Upload MSI
@@ -80,3 +66,4 @@ jobs:
         with:
           name: Youtube-GT-x64
           path: Youtube-GT-x64.msi
+          if-no-files-found: error
