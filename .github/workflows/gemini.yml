@@ -89,16 +89,13 @@ jobs:
 # -----------------------------------------------------------------------
       # BUILD PAKE APP - TARGETING GEMINI URL (FIXED)
       # -----------------------------------------------------------------------
+# -----------------------------------------------------------------------
+      # BUILD PAKE APP - TARGETING GEMINI URL (MOST ROBUST FIX)
+      # -----------------------------------------------------------------------
       - name: Build Pake app (FIXED)
         working-directory: _pake
         shell: pwsh
-        run: |
-          npx pake https://gemini.google.com/ `
-            --name Gemini-AI-Studio `
-            --targets x86_64-pc-windows-msvc `
-            --icon ./src-tauri/icons/icon.ico `
-            --width 1100 `
-            --height 750
+        run: npx pake https://gemini.google.com/ --name Gemini-AI-Studio --targets x86_64-pc-windows-msvc --icon ./src-tauri/icons/icon.ico --width 1100 --height 750
 
       # -----------------------------------------------------------------------
       # COLLECT & UPLOAD MSI
