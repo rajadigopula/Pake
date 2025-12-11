@@ -35,21 +35,6 @@ jobs:
         run: cargo update
 
       # -----------------------------------------------------------------------
-      # PATCH Tauri CONFIG TO REMOVE MENU BAR
-      # -----------------------------------------------------------------------
-      - name: Patch Tauri Config for No Menu Bar
-        shell: pwsh
-        run: |
-          $configPath = "_pake/src-tauri/tauri.conf.json"
-          $config = Get-Content $configPath -Raw
-          $patched = $config -replace '"windows":\s*
-
-\[.*?\]
-
-,' , '"windows": [ { "fullscreen": false, "decorations": false, "resizable": true, "titleBarStyle": "hidden", "alwaysOnTop": false } ],'
-          Set-Content -Path $configPath -Value $patched
-
-      # -----------------------------------------------------------------------
       # DOWNLOAD & PATCH GOODTUBE USERSCRIPT (CSS/JS INJECTION)
       # -----------------------------------------------------------------------
       - name: Download & Patch GoodTube
@@ -58,7 +43,6 @@ jobs:
         run: |
           curl -L "https://raw.githubusercontent.com/goodtube4u/goodtube/refs/heads/main/goodtube.js" -o goodtube.js
           $optimizationCode = @'
-
           // --- PAKE OPTIMIZATION INJECTION ---
           document.addEventListener('DOMContentLoaded', () => {
             const style = document.createElement('style');
@@ -69,19 +53,36 @@ jobs:
               .ytp-cued-thumbnail-overlay-image { filter: none !important; }
             `;
             document.head.appendChild(style);
-
-            document.addEventListener('fullscreenchange', () => {
-              if (document.fullscreenElement) {
-                document.body.style.margin = '0';
-                document.body.style.padding = '0';
-                document.documentElement.style.overflow = 'hidden';
-              }
-            });
-
             console.log('Pake Optimizations: Ambient mode and heavy effects disabled.');
+          });
+
+          // --- FULLSCREEN FIX ---
+          document.addEventListener('fullscreenchange', () => {
+            if (document.fullscreenElement) {
+              document.body.style.margin = '0';
+              document.body.style.padding = '0';
+              document.documentElement.style.overflow = 'hidden';
+            }
           });
           '@
           Add-Content -Path goodtube.js -Value $optimizationCode
+
+      # -----------------------------------------------------------------------
+      # PATCH TAURI CONFIG TO REMOVE MENU BAR
+      # -----------------------------------------------------------------------
+      - name: Patch Tauri Config
+        shell: pwsh
+        run: |
+          $configPath = "_pake/src-tauri/tauri.conf.json"
+          $json = Get-Content $configPath -Raw | ConvertFrom-Json
+          $json.tauri.windows = @(@{
+            fullscreen = $false
+            decorations = $false
+            resizable = $true
+            titleBarStyle = "hidden"
+            alwaysOnTop = $false
+          })
+          $json | ConvertTo-Json -Depth 10 | Set-Content $configPath
 
       # -----------------------------------------------------------------------
       # APPLY LOW-SPEC WEBVIEW2 SETTINGS
@@ -96,8 +97,7 @@ jobs:
                            -Value "--disable-smooth-scrolling --disable-gpu-vsync" `
                            -Type String -Force
 
-          $envFile = "src-tauri/.env"
-          Add-Content -Path $envFile -Value "TAURI_DEV_ARGS=--js-flags=--max-old-space-size=256"
+          Add-Content -Path src-tauri/.env -Value "TAURI_DEV_ARGS=--js-flags=--max-old-space-size=256"
 
       # -----------------------------------------------------------------------
       # BUILD PAKE APP
