@@ -83,24 +83,29 @@ jobs:
                            -Value "--disable-smooth-scrolling --disable-gpu-vsync" `
                            -Type String -Force
 
-          # 2. Tauri window: ensure node exists, then set values
+          # 2. Tauri window: robustly ensure structure exists
           $configPath = "src-tauri/tauri.conf.json"
           $json = Get-Content $configPath | ConvertFrom-Json
 
-          # create windows array if missing
-          if (-not $json.tauri.windows) {
+          # Create tauri object if missing
+          if (-not $json.PSObject.Properties['tauri']) {
+              $json | Add-Member -Name "tauri" -Value ([PSCustomObject]@{}) -MemberType NoteProperty
+          }
+          # Create windows array if missing
+          if (-not $json.tauri.PSObject.Properties['windows']) {
               $json.tauri | Add-Member -Name "windows" -Value @() -MemberType NoteProperty
           }
+          # Add at least one window if array is empty
           if ($json.tauri.windows.Count -eq 0) {
               $json.tauri.windows += [PSCustomObject]@{}
           }
 
-          # apply low-spec settings
+          # Apply low-spec settings
           $win = $json.tauri.windows[0]
-          $win.transparent   = $false
-          $win.decorations   = $true
-          $win.width         = 1100
-          $win.height        = 650
+          $win.transparent = $false
+          $win.decorations = $true
+          $win.width       = 1100
+          $win.height      = 650
 
           $json | ConvertTo-Json -Depth 10 | Set-Content $configPath
 
