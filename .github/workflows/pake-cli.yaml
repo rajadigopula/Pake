@@ -30,7 +30,6 @@ jobs:
         working-directory: _pake
         run: npm install
 
-      # Updating Tauri dependencies via Cargo is safer than regex patching files
       - name: Update Rust Dependencies
         working-directory: _pake/src-tauri
         run: cargo update
@@ -39,12 +38,12 @@ jobs:
         run: |
           curl -L "https://raw.githubusercontent.com/goodtube4u/goodtube/refs/heads/main/goodtube.js" -o _pake/goodtube.js
 
+      # FIX: Added 'shell: cmd' to support the ^ line continuation syntax
       - name: Build Pake app
         working-directory: _pake
-        # Removing --user-data-dir because hardcoding a temp path into the installer is not recommended.
-        # The installed app will automatically manage its own profile in AppData.
+        shell: cmd
         run: |
-          npx pake-cli https://www.youtube.com ^
+          npx pake https://www.youtube.com ^
             --name Youtube-GT ^
             --targets x86_64-pc-windows-msvc ^
             --icon ./src-tauri/icons/icon.ico ^
