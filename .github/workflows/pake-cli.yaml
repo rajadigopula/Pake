@@ -83,31 +83,28 @@ jobs:
                            -Value "--disable-smooth-scrolling --disable-gpu-vsync" `
                            -Type String -Force
 
-          # 2. Tauri window: robustly ensure structure exists and add properties
-          $configPath = "src-tauri/tauri.conf.json"
-          $json = Get-Content $configPath | ConvertFrom-Json
-
-          # Create tauri object if missing
-          if (-not $json.PSObject.Properties['tauri']) {
-              $json | Add-Member -Name "tauri" -Value ([PSCustomObject]@{}) -MemberType NoteProperty
-          }
-          # Create windows array if missing
-          if (-not $json.tauri.PSObject.Properties['windows']) {
-              $json.tauri | Add-Member -Name "windows" -Value @() -MemberType NoteProperty
-          }
-          # Add at least one window if array is empty
-          if ($json.tauri.windows.Count -eq 0) {
-              $json.tauri.windows += [PSCustomObject]@{}
-          }
-
-          # Apply low-spec settings (Add-Member -Force works whether property exists or not)
-          $win = $json.tauri.windows[0]
-          $win | Add-Member -NotePropertyName "transparent" -NotePropertyValue $false -Force
-          $win | Add-Member -NotePropertyName "decorations" -NotePropertyValue $true -Force
-          $win | Add-Member -NotePropertyName "width"       -NotePropertyValue 1100 -Force
-          $win | Add-Member -NotePropertyName "height"      -NotePropertyValue 650 -Force
-
-          $json | ConvertTo-Json -Depth 10 | Set-Content $configPath
+          # 2. Modify tauri.conf.json using Node.js (AVOIDS PowerShell JSON issues)
+          node -e "
+          const fs = require('fs');
+          const path = 'src-tauri/tauri.conf.json';
+          
+          // Read and parse config
+          const config = JSON.parse(fs.readFileSync(path, 'utf8'));
+          
+          // Ensure windows array exists with at least one window
+          if (!config.tauri) config.tauri = {};
+          if (!config.tauri.windows) config.tauri.windows = [{}];
+          if (!config.tauri.windows[0]) config.tauri.windows[0] = {};
+          
+          // Apply low-spec settings
+          config.tauri.windows[0].transparent = false;
+          config.tauri.windows[0].decorations = true;
+          config.tauri.windows[0].width = 1100;
+          config.tauri.windows[0].height = 650;
+          
+          // Write back with exact formatting Tauri expects
+          fs.writeFileSync(path, JSON.stringify(config, null, 2) + '\n');
+          "
 
           # 3. Optional: limit JS heap (V8)
           $envFile = "src-tauri/.env"
