@@ -34,14 +34,53 @@ jobs:
         working-directory: _pake/src-tauri
         run: cargo update
 
+      # -----------------------------------------------------------------------
+      # NEW STEP: HARDCORE OPTIMIZATION FOR LOW-END INTEL PC
+      # -----------------------------------------------------------------------
+      - name: Inject High-Performance Optimizations
+        working-directory: _pake
+        shell: pwsh
+        run: |
+          # 1. OPTIMIZE TAURI CONFIG (Disable Transparency & Custom Effects)
+          $configPath = "src-tauri/tauri.conf.json"
+          $json = Get-Content $configPath | ConvertFrom-Json
+          
+          # Disable transparency (Huge GPU saver)
+          if ($json.tauri.windows) {
+            $json.tauri.windows[0].transparent = $false
+            $json.tauri.windows[0].decorations = $true
+          }
+          
+          # Save the optimized config
+          $json | ConvertTo-Json -Depth 10 | Set-Content $configPath
+          Write-Host "Configuration patched: Transparency DISABLED, Native Decorations ENABLED."
+
+          # 2. INJECT WEBVIEW2 FLAGS VIA RUST (Force Hardware Acceleration)
+          # We inject an environment variable setting into main.rs before the app starts.
+          $rsPath = "src-tauri/src/main.rs"
+          $rsContent = Get-Content $rsPath -Raw
+          
+          # The flags:
+          # --ignore-gpu-blocklist: Use GPU even if old Intel driver
+          # --enable-gpu-rasterization: Paint using GPU
+          # --enable-zero-copy: Save RAM by not copying video buffers
+          # --disable-features=msSmartScreenProtection: Save CPU overhead
+          $flags = '"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--ignore-gpu-blocklist --enable-gpu-rasterization --enable-zero-copy --disable-features=msSmartScreenProtection"'
+          $injection = "std::env::set_var($flags); tauri::Builder::default()"
+          
+          # Replace the standard builder line with our optimized one
+          $newContent = $rsContent -replace 'tauri::Builder::default\(\)', $injection
+          Set-Content $rsPath $newContent
+          Write-Host "Rust code patched: Hardware acceleration flags injected."
+
       - name: Download YouTube Freedom userscript
         run: |
           curl -L "https://raw.githubusercontent.com/goodtube4u/goodtube/refs/heads/main/goodtube.js" -o _pake/goodtube.js
 
-      # FIX: Added 'shell: cmd' to support the ^ line continuation syntax
       - name: Build Pake app
         working-directory: _pake
         shell: cmd
+        # Note: We do not need to pass flags here because we injected them into the code above.
         run: |
           npx pake https://www.youtube.com ^
             --name Youtube-GT ^
@@ -57,7 +96,7 @@ jobs:
             Write-Host "Found MSI: $($msi.FullName)"
             Copy-Item $msi.FullName Youtube-GT-x64.msi
           } else {
-            throw "MSI not found. Build may have failed or output to a different directory."
+            throw "MSI not found. Build may have failed."
           }
 
       - name: Upload MSI
