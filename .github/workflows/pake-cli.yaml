@@ -79,17 +79,32 @@ jobs:
           # 1. Runtime-wide WebView2 flags (user-level, safe)
           $regRoot = "HKCU:\Software\Microsoft\EdgeUpdate\ClientState\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
           if (!(Test-Path $regRoot)) { New-Item -Path $regRoot -Force | Out-Null }
-          Set-ItemProperty -Path $regRoot -Name "AdditionalBrowserArguments" -Value "--disable-smooth-scrolling --disable-gpu-vsync" -Type String -Force
+          Set-ItemProperty -Path $regRoot -Name "AdditionalBrowserArguments" `
+                           -Value "--disable-smooth-scrolling --disable-gpu-vsync" `
+                           -Type String -Force
 
-          # 2. Tauri window: no transparency, smaller initial size
+          # 2. Tauri window: ensure node exists, then set values
           $configPath = "src-tauri/tauri.conf.json"
           $json = Get-Content $configPath | ConvertFrom-Json
-          $json.tauri.windows[0].transparent = $false
-          $json.tauri.windows[0].width  = 1100
-          $json.tauri.windows[0].height = 650
+
+          # create windows array if missing
+          if (-not $json.tauri.windows) {
+              $json.tauri | Add-Member -Name "windows" -Value @() -MemberType NoteProperty
+          }
+          if ($json.tauri.windows.Count -eq 0) {
+              $json.tauri.windows += [PSCustomObject]@{}
+          }
+
+          # apply low-spec settings
+          $win = $json.tauri.windows[0]
+          $win.transparent   = $false
+          $win.decorations   = $true
+          $win.width         = 1100
+          $win.height        = 650
+
           $json | ConvertTo-Json -Depth 10 | Set-Content $configPath
 
-          # 3. Optional: limit JS heap (V8) – does not need WebView2 switch
+          # 3. Optional: limit JS heap (V8)
           $envFile = "src-tauri/.env"
           Add-Content -Path $envFile -Value "TAURI_DEV_ARGS=--js-flags=--max-old-space-size=256"
 
