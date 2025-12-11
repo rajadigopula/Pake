@@ -70,7 +70,7 @@ jobs:
           Add-Content -Path goodtube.js -Value $optimizationCode
 
       # -----------------------------------------------------------------------
-      # APPLY LOW-SPEC WEBVIEW2 SETTINGS (REGISTRY + TAURI CONF)
+      # APPLY LOW-SPEC WEBVIEW2 SETTINGS (REGISTRY + ENV)
       # -----------------------------------------------------------------------
       - name: Apply Low-Spec WebView2 settings
         working-directory: _pake
@@ -83,35 +83,12 @@ jobs:
                            -Value "--disable-smooth-scrolling --disable-gpu-vsync" `
                            -Type String -Force
 
-          # 2. Modify tauri.conf.json using Node.js (AVOIDS PowerShell JSON issues)
-          node -e "
-          const fs = require('fs');
-          const path = 'src-tauri/tauri.conf.json';
-          
-          // Read and parse config
-          const config = JSON.parse(fs.readFileSync(path, 'utf8'));
-          
-          // Ensure windows array exists with at least one window
-          if (!config.tauri) config.tauri = {};
-          if (!config.tauri.windows) config.tauri.windows = [{}];
-          if (!config.tauri.windows[0]) config.tauri.windows[0] = {};
-          
-          // Apply low-spec settings
-          config.tauri.windows[0].transparent = false;
-          config.tauri.windows[0].decorations = true;
-          config.tauri.windows[0].width = 1100;
-          config.tauri.windows[0].height = 650;
-          
-          // Write back with exact formatting Tauri expects
-          fs.writeFileSync(path, JSON.stringify(config, null, 2) + '\n');
-          "
-
-          # 3. Optional: limit JS heap (V8)
+          # 2. Optional: limit JS heap (V8)
           $envFile = "src-tauri/.env"
           Add-Content -Path $envFile -Value "TAURI_DEV_ARGS=--js-flags=--max-old-space-size=256"
 
       # -----------------------------------------------------------------------
-      # BUILD PAKE APP
+      # BUILD PAKE APP (PASS ALL SETTINGS DIRECTLY TO CLI)
       # -----------------------------------------------------------------------
       - name: Build Pake app
         working-directory: _pake
@@ -122,7 +99,11 @@ jobs:
             --name Youtube-GT `
             --targets x86_64-pc-windows-msvc `
             --icon ./src-tauri/icons/icon.ico `
-            --inject "$inject"
+            --inject "$inject" `
+            --width 1100 `
+            --height 650 `
+            --no-transparent `
+            --decorated
 
       # -----------------------------------------------------------------------
       # COLLECT & UPLOAD MSI
