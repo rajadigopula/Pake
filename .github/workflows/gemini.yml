@@ -37,35 +37,7 @@ jobs:
       # -----------------------------------------------------------------------
       # PATCH TAURI CONFIG TO REMOVE MENU BAR (As in the original)
       # -----------------------------------------------------------------------
-# -----------------------------------------------------------------------
-      # PATCH TAURI CONFIG TO REMOVE MENU BAR (CORRECTED)
-      # -----------------------------------------------------------------------
-      - name: Patch Tauri Config (FIXED)
-        shell: pwsh
-        run: |
-          $configPath = "_pake/src-tauri/tauri.conf.json"
-          
-          # Read and convert the JSON file
-          $json = Get-Content $configPath -Raw | ConvertFrom-Json
-          
-          # Ensure the 'tauri' object exists (it usually does)
-          if (-not $json.tauri) {
-              $json | Add-Member -MemberType NoteProperty -Name tauri -Value @{}
-          }
 
-          # Assign the new 'windows' array to the 'tauri' object
-          # This overwrites any existing window definition with your desired settings
-          $json.tauri.windows = @(@{
-            fullscreen = $false
-            decorations = $false
-            resizable = $true
-            titleBarStyle = "hidden"
-            alwaysOnTop = $false
-          })
-          
-          # Write the modified JSON back to the file
-          # The -Depth 10 ensures all nested properties are preserved
-          $json | ConvertTo-Json -Depth 10 | Set-Content $configPath
       # -----------------------------------------------------------------------
       # APPLY LOW-SPEC WEBVIEW2 SETTINGS (As in the original)
       # -----------------------------------------------------------------------
@@ -83,15 +55,22 @@ jobs:
           # Set Node memory limit for Tauri build process
           Add-Content -Path src-tauri/.env -Value "TAURI_DEV_ARGS=--js-flags=--max-old-space-size=256"
 
-      # -----------------------------------------------------------------------
-      # BUILD PAKE APP - TARGETING GEMINI URL
-      # -----------------------------------------------------------------------
-# -----------------------------------------------------------------------
-      # BUILD PAKE APP - TARGETING GEMINI URL (FIXED)
-      # -----------------------------------------------------------------------
-# -----------------------------------------------------------------------
-      # BUILD PAKE APP - TARGETING GEMINI URL (MOST ROBUST FIX)
-      # -----------------------------------------------------------------------
+      - name: Build Pake app (Using CLI Flags)
+        working-directory: _pake
+        shell: pwsh
+        run: |
+          npx pake https://gemini.google.com/ `
+            --name Gemini-AI-Studio `
+            --targets x86_64-pc-windows-msvc `
+            --icon ./src-tauri/icons/icon.ico `
+            --width 1100 `
+            --height 750 `
+            --borderless # This should set decorations: false and titleBarStyle: hiddenldItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
+          if ($msi) {
+            Copy-Item $msi.FullName Gemini-AI-Studio-x64.msi
+          } else {
+            throw "MSI not found."
+          }
 
       # -----------------------------------------------------------------------
       # COLLECT & UPLOAD MSI
@@ -114,22 +93,7 @@ jobs:
           }
       # BUILD PAKE APP - TARGETING GEMINI URL (Using Pake borderless flag)
       # -----------------------------------------------------------------------
-      - name: Build Pake app (Using CLI Flags)
-        working-directory: _pake
-        shell: pwsh
-        run: |
-          npx pake https://gemini.google.com/ `
-            --name Gemini-AI-Studio `
-            --targets x86_64-pc-windows-msvc `
-            --icon ./src-tauri/icons/icon.ico `
-            --width 1100 `
-            --height 750 `
-            --borderless # This should set decorations: false and titleBarStyle: hiddenldItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
-          if ($msi) {
-            Copy-Item $msi.FullName Gemini-AI-Studio-x64.msi
-          } else {
-            throw "MSI not found."
-          }
+
 
       - name: Upload MSI
         uses: actions/upload-artifact@v4
