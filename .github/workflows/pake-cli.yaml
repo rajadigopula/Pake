@@ -111,14 +111,14 @@ jobs:
 
       - name: Build Pake app
         working-directory: _pake
-        shell: cmd
-        # Note: Previous user flags removed. We rely on the Rust injection above.
+        shell: pwsh
         run: |
-          npx pake https://www.youtube.com ^
-            --name Youtube-GT ^
-            --targets x86_64-pc-windows-msvc ^
-            --icon ./src-tauri/icons/icon.ico ^
-            --inject goodtube.js
+          $inject = Resolve-Path goodtube.js        # ← absolute path
+          npx pake https://www.youtube.com `
+            --name Youtube-GT `
+            --targets x86_64-pc-windows-msvc `
+            --icon ./src-tauri/icons/icon.ico `
+            --inject "$inject"
 
       - name: Find and rename MSI
         shell: pwsh
