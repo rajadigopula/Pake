@@ -96,10 +96,22 @@ jobs:
       # -----------------------------------------------------------------------
       # COLLECT & UPLOAD MSI
       # -----------------------------------------------------------------------
-      - name: Find and rename MSI
+# -----------------------------------------------------------------------
+      # COLLECT & UPLOAD MSI
+      # -----------------------------------------------------------------------
+      - name: Find and rename MSI (FIXED)
         shell: pwsh
         run: |
-          $msi = Get-Chi# -----------------------------------------------------------------------
+          # Find the first MSI file recursively within the _pake directory
+          $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
+          
+          if ($msi) {
+            # Copy the found MSI to the root of the runner directory with the final name
+            Copy-Item $msi.FullName Gemini-AI-Studio-x64.msi
+          } else {
+            # Throw an error if the MSI was not found (meaning the build failed)
+            throw "MSI not found. Check the 'Build Pake app' step for errors."
+          }
       # BUILD PAKE APP - TARGETING GEMINI URL (Using Pake borderless flag)
       # -----------------------------------------------------------------------
       - name: Build Pake app (Using CLI Flags)
