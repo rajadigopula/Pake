@@ -35,6 +35,16 @@ jobs:
         run: cargo update
 
       # -----------------------------------------------------------------------
+      # PATCH TAURI CONFIG TO DISABLE MENU BAR
+      # -----------------------------------------------------------------------
+      - name: Disable Tauri Menu Bar
+        working-directory: _pake
+        shell: pwsh
+        run: |
+          $configPath = "src-tauri/tauri.conf.json"
+          (Get-Content $configPath -Raw) -replace '"menu"\s*:\s*\{[^}]*\}', '"menu": { "enabled": false }' | Set-Content $configPath
+
+      # -----------------------------------------------------------------------
       # DOWNLOAD & PATCH GOODTUBE USERSCRIPT (CSS/JS INJECTION)
       # -----------------------------------------------------------------------
       - name: Download & Patch GoodTube
@@ -61,6 +71,7 @@ jobs:
           });
           '@
           Add-Content -Path goodtube.js -Value $optimizationCode
+
       # -----------------------------------------------------------------------
       # APPLY LOW-SPEC WEBVIEW2 SETTINGS (REGISTRY + ENV)
       # -----------------------------------------------------------------------
@@ -68,17 +79,16 @@ jobs:
         working-directory: _pake
         shell: pwsh
         run: |
-          # 1. Runtime-wide WebView2 flags (user-level, safe)
           $regRoot = "HKCU:\Software\Microsoft\EdgeUpdate\ClientState\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
           if (!(Test-Path $regRoot)) { New-Item -Path $regRoot -Force | Out-Null }
           Set-ItemProperty -Path $regRoot -Name "AdditionalBrowserArguments" `
                            -Value "--disable-smooth-scrolling --disable-gpu-vsync" `
                            -Type String -Force
-          # 2. Optional: limit JS heap (V8)
           $envFile = "src-tauri/.env"
           Add-Content -Path $envFile -Value "TAURI_DEV_ARGS=--js-flags=--max-old-space-size=256"
+
       # -----------------------------------------------------------------------
-      # BUILD PAKE APP (USING ONLY DOCUMENTED CLI OPTIONS)
+      # BUILD PAKE APP
       # -----------------------------------------------------------------------
       - name: Build Pake app
         working-directory: _pake
@@ -93,6 +103,7 @@ jobs:
             --width 1100 `
             --height 650 `
             --hide-title-bar
+
       # -----------------------------------------------------------------------
       # COLLECT & UPLOAD MSI
       # -----------------------------------------------------------------------
@@ -105,6 +116,7 @@ jobs:
           } else {
             throw "MSI not found."
           }
+
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
