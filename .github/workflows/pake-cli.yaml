@@ -26,87 +26,38 @@ jobs:
       - name: Clone Pake
         run: git clone https://github.com/tw93/pake.git _pake
 
-      - name: Install Pake dependencies
+      - name: Install Pake Dependencies
         working-directory: _pake
         run: npm install
 
-      - name: Update Rust dependencies
+      - name: Update Rust Dependencies
         working-directory: _pake/src-tauri
         run: cargo update
 
       # -----------------------------------------------------------------------
-      # KILL NATIVE MENU ON WINDOWS BY PATCHING PAKE RUST SOURCES
+      # DISABLE TAURI MENU BAR + WINDOW DECORATIONS VIA JSON PATCH
       # -----------------------------------------------------------------------
-      - name: Disable Pake native menu on Windows
-        working-directory: _pake/src-tauri/src
-        shell: pwsh
-        run: |
-          # 1) Make menu::get_menu() return None on Windows
-          $menuPath = "menu.rs"
-          if (Test-Path $menuPath) {
-            $menu = Get-Content -Raw $menuPath
-
-            # Ensure function signature uses Option<Menu> (robust to minor variations)
-            # Replace entire body to return None on Windows, original on other platforms.
-            $menu = $menu -replace "(?s)pub\s+fn\s+get_menu\([^\)]*\)\s*->\s*Option<[^>]+>\s*\{.*?\}",
-            @'
-pub fn get_menu() -> Option<tauri::menu::Menu> {
-    #[cfg(target_os = "windows")]
-    {
-        // Disable native menu bar on Windows
-        return None;
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        // Keep existing non-Windows menu if needed; or disable everywhere by returning None
-        // return None;
-        // Fallback: minimal empty menu to avoid bar in most toolkits (but Windows still needs None above)
-        tauri::menu::Menu::new().ok()
-    }
-}
-'@
-
-            Set-Content -Path $menuPath -Value $menu -Encoding UTF8
-          }
-
-          # 2) Ensure main.rs does not force a menu when get_menu() is None
-          $mainPath = "main.rs"
-          if (Test-Path $mainPath) {
-            $main = Get-Content -Raw $mainPath
-
-            # Make menu attachment conditional
-            $main = $main -replace "(\.menu\(\s*menu\s*\))", ".menu_opt(menu)"
-            # Provide builder extension .menu_opt(...) if not present, implement a simple guard via replace
-            # If code constructs 'let menu = menu::get_menu();', keep it; tauri allows None via .menu_opt
-            # If .menu_opt is not present, we fallback: remove .menu(menu) outright on Windows
-            if ($main -notmatch "menu_opt") {
-              # As a fallback, strip .menu(menu) entirely
-              $main = $main -replace "\.menu\(\s*menu\s*\)", ""
-            }
-
-            Set-Content -Path $mainPath -Value $main -Encoding UTF8
-          }
-
-      # -----------------------------------------------------------------------
-      # OPTIONAL HARDENING: DECORATIONS OFF IN TAURI CONFIG (WINDOW CHROME)
-      # -----------------------------------------------------------------------
-      - name: Harden window decorations in tauri.conf.json
+      - name: Disable Tauri menu and decorations
         working-directory: _pake/src-tauri
         shell: pwsh
         run: |
           $configPath = "tauri.conf.json"
-          if (Test-Path $configPath) {
-            $json = Get-Content -Raw $configPath
-            # ensure decorations false on the primary window
-            $json = $json -replace '"decorations"\s*:\s*true', '"decorations": false'
-            # If decorations field missing, add it to the first window entry
-            if ($json -notmatch '"decorations"\s*:') {
-              $json = $json -replace '("windows"\s*:\s*
-
-\[\s*\{\s*)', '$1"decorations": false, '
-            }
-            Set-Content -Path $configPath -Value $json -Encoding UTF8
+          if (!(Test-Path $configPath)) {
+            throw "tauri.conf.json not found at $configPath"
           }
+          $json = Get-Content -Raw $configPath | ConvertFrom-Json
+
+          if (-not $json.tauri) { $json | Add-Member -NotePropertyName tauri -NotePropertyValue (@{}) }
+          if (-not $json.tauri.menu) { $json.tauri | Add-Member -NotePropertyName menu -NotePropertyValue (@{}) }
+          $json.tauri.menu.enabled = $false
+
+          if (-not $json.tauri.windows) { $json.tauri.windows = @() }
+          if ($json.tauri.windows.Count -eq 0) { $json.tauri.windows += @{} }
+
+          # Ensure the primary window disables decorations to avoid native chrome
+          $json.tauri.windows[0].decorations = $false
+
+          $json | ConvertTo-Json -Depth 10 | Set-Content -Path $configPath -Encoding UTF8
 
       # -----------------------------------------------------------------------
       # DOWNLOAD & PATCH GOODTUBE USERSCRIPT (CSS/JS INJECTION)
@@ -116,7 +67,7 @@ pub fn get_menu() -> Option<tauri::menu::Menu> {
         shell: pwsh
         run: |
           curl -L "https://raw.githubusercontent.com/goodtube4u/goodtube/refs/heads/main/goodtube.js" -o goodtube.js
-          $optimizationCode = @"
+          $optimizationCode = @'
           // --- PAKE OPTIMIZATION INJECTION ---
           document.addEventListener('DOMContentLoaded', () => {
             const style = document.createElement('style');
@@ -133,27 +84,28 @@ pub fn get_menu() -> Option<tauri::menu::Menu> {
             document.head.appendChild(style);
             console.log('Pake Optimizations: Ambient mode and heavy effects disabled.');
           });
-          "@
+          '@
           Add-Content -Path goodtube.js -Value $optimizationCode
-
 
       # -----------------------------------------------------------------------
       # APPLY LOW-SPEC WEBVIEW2 SETTINGS (REGISTRY + ENV)
       # -----------------------------------------------------------------------
-      - name: Apply low-spec WebView2 settings
+      - name: Apply Low-Spec WebView2 settings
         working-directory: _pake
         shell: pwsh
         run: |
+          # 1. Runtime-wide WebView2 flags (user-level, safe)
           $regRoot = "HKCU:\Software\Microsoft\EdgeUpdate\ClientState\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
           if (!(Test-Path $regRoot)) { New-Item -Path $regRoot -Force | Out-Null }
           Set-ItemProperty -Path $regRoot -Name "AdditionalBrowserArguments" `
                            -Value "--disable-smooth-scrolling --disable-gpu-vsync" `
                            -Type String -Force
+          # 2. Optional: limit JS heap (V8)
           $envFile = "src-tauri/.env"
           Add-Content -Path $envFile -Value "TAURI_DEV_ARGS=--js-flags=--max-old-space-size=256"
 
       # -----------------------------------------------------------------------
-      # BUILD PAKE APP
+      # BUILD PAKE APP (USING ONLY DOCUMENTED CLI OPTIONS)
       # -----------------------------------------------------------------------
       - name: Build Pake app
         working-directory: _pake
