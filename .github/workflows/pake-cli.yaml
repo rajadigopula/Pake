@@ -26,28 +26,92 @@ jobs:
       - name: Clone Pake
         run: git clone https://github.com/tw93/pake.git _pake
 
-      - name: Install Pake Dependencies
+      - name: Install Pake dependencies
         working-directory: _pake
         run: npm install
 
-      - name: Update Rust Dependencies
+      - name: Update Rust dependencies
         working-directory: _pake/src-tauri
         run: cargo update
 
       # -----------------------------------------------------------------------
-      # PATCH TAURI CONFIG TO DISABLE MENU BAR
+      # KILL NATIVE MENU ON WINDOWS BY PATCHING PAKE RUST SOURCES
       # -----------------------------------------------------------------------
-      - name: Disable Tauri Menu Bar
-        working-directory: _pake
+      - name: Disable Pake native menu on Windows
+        working-directory: _pake/src-tauri/src
         shell: pwsh
         run: |
-          $configPath = "src-tauri/tauri.conf.json"
-          (Get-Content $configPath -Raw) -replace '"menu"\s*:\s*\{[^}]*\}', '"menu": { "enabled": false }' | Set-Content $configPath
+          # 1) Make menu::get_menu() return None on Windows
+          $menuPath = "menu.rs"
+          if (Test-Path $menuPath) {
+            $menu = Get-Content -Raw $menuPath
+
+            # Ensure function signature uses Option<Menu> (robust to minor variations)
+            # Replace entire body to return None on Windows, original on other platforms.
+            $menu = $menu -replace "(?s)pub\s+fn\s+get_menu\([^\)]*\)\s*->\s*Option<[^>]+>\s*\{.*?\}",
+            @'
+pub fn get_menu() -> Option<tauri::menu::Menu> {
+    #[cfg(target_os = "windows")]
+    {
+        // Disable native menu bar on Windows
+        return None;
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Keep existing non-Windows menu if needed; or disable everywhere by returning None
+        // return None;
+        // Fallback: minimal empty menu to avoid bar in most toolkits (but Windows still needs None above)
+        tauri::menu::Menu::new().ok()
+    }
+}
+'@
+
+            Set-Content -Path $menuPath -Value $menu -Encoding UTF8
+          }
+
+          # 2) Ensure main.rs does not force a menu when get_menu() is None
+          $mainPath = "main.rs"
+          if (Test-Path $mainPath) {
+            $main = Get-Content -Raw $mainPath
+
+            # Make menu attachment conditional
+            $main = $main -replace "(\.menu\(\s*menu\s*\))", ".menu_opt(menu)"
+            # Provide builder extension .menu_opt(...) if not present, implement a simple guard via replace
+            # If code constructs 'let menu = menu::get_menu();', keep it; tauri allows None via .menu_opt
+            # If .menu_opt is not present, we fallback: remove .menu(menu) outright on Windows
+            if ($main -notmatch "menu_opt") {
+              # As a fallback, strip .menu(menu) entirely
+              $main = $main -replace "\.menu\(\s*menu\s*\)", ""
+            }
+
+            Set-Content -Path $mainPath -Value $main -Encoding UTF8
+          }
+
+      # -----------------------------------------------------------------------
+      # OPTIONAL HARDENING: DECORATIONS OFF IN TAURI CONFIG (WINDOW CHROME)
+      # -----------------------------------------------------------------------
+      - name: Harden window decorations in tauri.conf.json
+        working-directory: _pake/src-tauri
+        shell: pwsh
+        run: |
+          $configPath = "tauri.conf.json"
+          if (Test-Path $configPath) {
+            $json = Get-Content -Raw $configPath
+            # ensure decorations false on the primary window
+            $json = $json -replace '"decorations"\s*:\s*true', '"decorations": false'
+            # If decorations field missing, add it to the first window entry
+            if ($json -notmatch '"decorations"\s*:') {
+              $json = $json -replace '("windows"\s*:\s*
+
+\[\s*\{\s*)', '$1"decorations": false, '
+            }
+            Set-Content -Path $configPath -Value $json -Encoding UTF8
+          }
 
       # -----------------------------------------------------------------------
       # DOWNLOAD & PATCH GOODTUBE USERSCRIPT (CSS/JS INJECTION)
       # -----------------------------------------------------------------------
-      - name: Download & Patch GoodTube
+      - name: Download & patch GoodTube
         working-directory: _pake
         shell: pwsh
         run: |
@@ -75,7 +139,7 @@ jobs:
       # -----------------------------------------------------------------------
       # APPLY LOW-SPEC WEBVIEW2 SETTINGS (REGISTRY + ENV)
       # -----------------------------------------------------------------------
-      - name: Apply Low-Spec WebView2 settings
+      - name: Apply low-spec WebView2 settings
         working-directory: _pake
         shell: pwsh
         run: |
