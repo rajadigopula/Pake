@@ -47,60 +47,38 @@ jobs:
           document.addEventListener('DOMContentLoaded', () => {
             const style = document.createElement('style');
             style.innerHTML = `
+              /* KILL AMBIENT MODE (#1 GPU Hog) */
               #cinematics, ytd-watch-flexy[theater] #player-container-inner::before { display: none !important; }
+              /* Disable hover animations */
               ytd-thumbnail a #mouseover-overlay { display: none !important; }
+              /* Reduce transparency effects */
               #guide-content, #masthead-container { backdrop-filter: none !important; background: #0f0f0f !important; }
+              /* Disable heavy blur */
               .ytp-cued-thumbnail-overlay-image { filter: none !important; }
             `;
             document.head.appendChild(style);
             console.log('Pake Optimizations: Ambient mode and heavy effects disabled.');
           });
-
-          // --- FULLSCREEN FIX ---
-          document.addEventListener('fullscreenchange', () => {
-            if (document.fullscreenElement) {
-              document.body.style.margin = '0';
-              document.body.style.padding = '0';
-              document.documentElement.style.overflow = 'hidden';
-            }
-          });
           '@
           Add-Content -Path goodtube.js -Value $optimizationCode
-
       # -----------------------------------------------------------------------
-      # PATCH TAURI CONFIG TO REMOVE MENU BAR
-      # -----------------------------------------------------------------------
-      - name: Patch Tauri Config
-        shell: pwsh
-        run: |
-          $configPath = "_pake/src-tauri/tauri.conf.json"
-          $json = Get-Content $configPath -Raw | ConvertFrom-Json
-          $json.tauri.windows = @(@{
-            fullscreen = $false
-            decorations = $false
-            resizable = $true
-            titleBarStyle = "hidden"
-            alwaysOnTop = $false
-          })
-          $json | ConvertTo-Json -Depth 10 | Set-Content $configPath
-
-      # -----------------------------------------------------------------------
-      # APPLY LOW-SPEC WEBVIEW2 SETTINGS
+      # APPLY LOW-SPEC WEBVIEW2 SETTINGS (REGISTRY + ENV)
       # -----------------------------------------------------------------------
       - name: Apply Low-Spec WebView2 settings
         working-directory: _pake
         shell: pwsh
         run: |
+          # 1. Runtime-wide WebView2 flags (user-level, safe)
           $regRoot = "HKCU:\Software\Microsoft\EdgeUpdate\ClientState\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
           if (!(Test-Path $regRoot)) { New-Item -Path $regRoot -Force | Out-Null }
           Set-ItemProperty -Path $regRoot -Name "AdditionalBrowserArguments" `
                            -Value "--disable-smooth-scrolling --disable-gpu-vsync" `
                            -Type String -Force
-
-          Add-Content -Path src-tauri/.env -Value "TAURI_DEV_ARGS=--js-flags=--max-old-space-size=256"
-
+          # 2. Optional: limit JS heap (V8)
+          $envFile = "src-tauri/.env"
+          Add-Content -Path $envFile -Value "TAURI_DEV_ARGS=--js-flags=--max-old-space-size=256"
       # -----------------------------------------------------------------------
-      # BUILD PAKE APP
+      # BUILD PAKE APP (USING ONLY DOCUMENTED CLI OPTIONS)
       # -----------------------------------------------------------------------
       - name: Build Pake app
         working-directory: _pake
@@ -115,7 +93,6 @@ jobs:
             --width 1100 `
             --height 650
             --hide-title-bar
-
       # -----------------------------------------------------------------------
       # COLLECT & UPLOAD MSI
       # -----------------------------------------------------------------------
@@ -128,7 +105,6 @@ jobs:
           } else {
             throw "MSI not found."
           }
-
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
