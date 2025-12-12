@@ -91,7 +91,7 @@ jobs:
             --icon ./src-tauri/icons/icon.ico `
             --inject "$inject" `
             --width 1100 `
-            --height 650
+            --height 650 `
             --hide-title-bar
       # -----------------------------------------------------------------------
       # COLLECT & UPLOAD MSI
