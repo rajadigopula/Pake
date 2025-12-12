@@ -35,206 +35,219 @@ jobs:
         run: cargo update
 
       # =========================================================================
-      # CREATE YOUTUBE OPTIMIZATION SCRIPT
+      # DEBUG: Show file structure
+      # =========================================================================
+      - name: Debug File Structure
+        shell: pwsh
+        run: |
+          Write-Host "=== Rust source files ==="
+          Get-ChildItem -Path "_pake/src-tauri/src" -Recurse -Filter "*.rs" | ForEach-Object { Write-Host $_.FullName }
+          Write-Host ""
+          Write-Host "=== Tauri config files ==="
+          Get-ChildItem -Path "_pake/src-tauri" -Filter "*.json" | ForEach-Object { Write-Host $_.FullName }
+          Write-Host ""
+          Write-Host "=== Cargo.toml ==="
+          Get-Content "_pake/src-tauri/Cargo.toml" | Select-Object -First 30
+
+      # =========================================================================
+      # DOWNLOAD GOODTUBE
       # =========================================================================
       - name: Download GoodTube
         working-directory: _pake
-        run: |
-          curl -L "https://raw.githubusercontent.com/goodtube4u/goodtube/refs/heads/main/goodtube.js" -o goodtube.js
+        run: curl -L "https://raw.githubusercontent.com/goodtube4u/goodtube/refs/heads/main/goodtube.js" -o goodtube.js
 
-      - name: Create Optimization Script
+      # =========================================================================
+      # CREATE SAFE OPTIMIZATION SCRIPT (won't break video)
+      # =========================================================================
+      - name: Create Safe Optimization Script
         working-directory: _pake
         shell: pwsh
         run: |
-          $script = @"
-          
-          // ============================================================================
-          // PAKE YOUTUBE OPTIMIZER - LOW RESOURCE EDITION
-          // ============================================================================
-          (function() {
-            'use strict';
-            
-            var PERF_CSS = [
-              '#cinematics, #cinematics-container { display: none !important; }',
-              'ytd-watch-flexy[theater] #player-container-inner::before { display: none !important; }',
-              '.ytp-gradient-top, .ytp-gradient-bottom { display: none !important; }',
-              '*, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }',
-              'ytd-thumbnail #mouseover-overlay, ytd-thumbnail #hover-overlays, #video-preview-container { display: none !important; }',
-              '#guide-content, #masthead-container, ytd-masthead { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: #0f0f0f !important; }',
-              '.ytp-cued-thumbnail-overlay-image, .ytp-videowall-still-image { filter: none !important; }',
-              'ytd-rich-item-renderer, ytd-video-renderer { box-shadow: none !important; }',
-              'ytd-miniplayer { display: none !important; }',
-              'img.yt-core-image { image-rendering: auto; content-visibility: auto; }',
-              '#guide-inner-content ytd-guide-section-renderer:nth-child(n+4) { display: none !important; }',
-              'ytd-mealbar-promo-renderer, #masthead-ad, ytd-ad-slot-renderer, ytd-banner-promo-renderer { display: none !important; }',
-              'ytd-promoted-sparkles-web-renderer, ytd-promoted-video-renderer, ytd-display-ad-renderer { display: none !important; }',
-              '.ytp-ad-module, .video-ads, #player-ads, ytd-companion-slot-renderer { display: none !important; }',
-              '.ytp-ce-element, .ytp-cards-teaser, .annotation { display: none !important; }',
-              '#movie_player, .html5-video-container, video { will-change: auto !important; contain: layout style paint; }',
-              '::-webkit-scrollbar { width: 8px; background: #181818; }',
-              '::-webkit-scrollbar-thumb { background: #333; }'
-            ].join(' ');
-            
-            function injectCSS() {
-              if (document.getElementById('pake-perf-css')) return;
-              var s = document.createElement('style');
-              s.id = 'pake-perf-css';
-              s.textContent = PERF_CSS;
-              (document.head || document.documentElement).appendChild(s);
-            }
-            
-            function setupLazyLoad() {
-              document.querySelectorAll('img.yt-core-image').forEach(function(img) {
-                img.loading = 'lazy';
-                img.decoding = 'async';
-              });
-            }
-            
-            function stopPreviews() {
-              var main = document.querySelector('#movie_player video');
-              if (main) main.dataset.pakeMain = '1';
-              document.querySelectorAll('video:not([data-pake-main])').forEach(function(v) {
-                if (!v.closest('#movie_player')) {
-                  v.pause();
-                  v.src = '';
-                }
-              });
-            }
-            
-            function blockTracking() {
-              var blocked = ['doubleclick', 'googlesyndication', 'googleadservices', '/pagead/', '/ads/', 'log_event'];
-              var origFetch = window.fetch;
-              window.fetch = function(url) {
-                if (typeof url === 'string') {
-                  for (var i = 0; i < blocked.length; i++) {
-                    if (url.indexOf(blocked[i]) !== -1) {
-                      return Promise.resolve(new Response('', { status: 204 }));
-                    }
-                  }
-                }
-                return origFetch.apply(this, arguments);
-              };
-            }
-            
-            function optimizePlayer() {
-              var p = document.getElementById('movie_player');
-              if (!p) return;
-              try {
-                if (p.setPlaybackQualityRange) {
-                  var q = p.getAvailableQualityLevels();
-                  var current = p.getPlaybackQuality();
-                  var highRes = ['hd1080','hd1440','hd2160','highres'];
-                  if (q.indexOf('hd720') !== -1 && highRes.indexOf(current) !== -1) {
-                    p.setPlaybackQualityRange('hd720', 'hd720');
-                  }
-                }
-                if (p.unloadModule) p.unloadModule('annotations_module');
-              } catch(e) {}
-            }
-            
-            function cleanup() {
-              var selectors = ['ytd-promoted-sparkles-web-renderer', 'ytd-promoted-video-renderer', 'ytd-display-ad-renderer', '#player-ads', '.ytp-ad-module'];
-              selectors.forEach(function(s) {
-                document.querySelectorAll(s).forEach(function(el) { el.remove(); });
-              });
-            }
-            
-            function init() {
-              console.log('[Pake YT Optimizer] Starting...');
-              injectCSS();
-              setupLazyLoad();
-              blockTracking();
-              setTimeout(function() { stopPreviews(); optimizePlayer(); cleanup(); }, 1500);
-              setInterval(stopPreviews, 3000);
-              setInterval(optimizePlayer, 5000);
-              setInterval(cleanup, 5000);
-              setInterval(injectCSS, 2000);
-              setInterval(setupLazyLoad, 3000);
-              console.log('[Pake YT Optimizer] Active');
-            }
-            
-            if (document.readyState === 'loading') {
-              document.addEventListener('DOMContentLoaded', init);
-            } else {
-              init();
-            }
-            
-            var lastUrl = location.href;
-            setInterval(function() {
-              if (location.href !== lastUrl) {
-                lastUrl = location.href;
-                setTimeout(init, 500);
-              }
-            }, 1000);
-            
-          })();
-          "@
-          
-          Add-Content -Path goodtube.js -Value $script
-          Write-Host "Optimization script created"
+          $script = @'
+
+// ============================================================================
+// PAKE YOUTUBE OPTIMIZER v2 - SAFE VERSION
+// ============================================================================
+(function() {
+  'use strict';
+  
+  function addStyles() {
+    if (document.getElementById('pake-opt-css')) return;
+    var css = document.createElement('style');
+    css.id = 'pake-opt-css';
+    css.textContent = [
+      '/* Disable ambient mode */',
+      '#cinematics { display: none !important; visibility: hidden !important; opacity: 0 !important; }',
+      '#cinematics-container { display: none !important; }',
+      '',
+      '/* Disable animations */',
+      'ytd-thumbnail #mouseover-overlay { display: none !important; }',
+      'ytd-thumbnail #hover-overlays { display: none !important; }',
+      '#video-preview-container { display: none !important; }',
+      '',
+      '/* Remove blur effects */',
+      '.ytp-cued-thumbnail-overlay-image { filter: none !important; }',
+      '',
+      '/* Simplify backgrounds */',
+      '#guide-content { backdrop-filter: none !important; }',
+      '#masthead-container { backdrop-filter: none !important; }',
+      '',
+      '/* Hide ads */',
+      'ytd-ad-slot-renderer { display: none !important; }',
+      'ytd-mealbar-promo-renderer { display: none !important; }',
+      '#masthead-ad { display: none !important; }',
+      '.ytp-ad-module { display: none !important; }',
+      '',
+      '/* Hide miniplayer */',
+      'ytd-miniplayer { display: none !important; }',
+      '',
+      '/* Performance hints */',
+      'img.yt-core-image { content-visibility: auto; }'
+    ].join('\n');
+    
+    if (document.head) {
+      document.head.appendChild(css);
+    } else {
+      document.addEventListener('DOMContentLoaded', function() {
+        document.head.appendChild(css);
+      });
+    }
+  }
+  
+  function lazyImages() {
+    var images = document.querySelectorAll('img.yt-core-image:not([loading])');
+    for (var i = 0; i < images.length; i++) {
+      images[i].loading = 'lazy';
+      images[i].decoding = 'async';
+    }
+  }
+  
+  function init() {
+    console.log('[Pake Optimizer] Initializing...');
+    addStyles();
+    lazyImages();
+    setInterval(lazyImages, 5000);
+    setInterval(addStyles, 3000);
+    console.log('[Pake Optimizer] Ready');
+  }
+  
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+'@
+          Add-Content -Path goodtube.js -Value $script -Encoding UTF8
+          Write-Host "Created safe optimization script"
 
       # =========================================================================
-      # PATCH RUST FOR WEBVIEW2 FLAGS
+      # REMOVE MENU - Method 1: Patch Tauri Config
       # =========================================================================
-      - name: Patch WebView2 Flags
+      - name: Patch Tauri Config to Remove Menu
         shell: pwsh
         run: |
-          $mainRs = "_pake/src-tauri/src/main.rs"
-          $libRs = "_pake/src-tauri/src/lib.rs"
+          $configPath = "_pake/src-tauri/tauri.conf.json"
           
-          $flags = '--disable-features=msSmartScreenProtection,MediaRouter,Translate,BackForwardCache --enable-low-end-device-mode --disable-smooth-scrolling --disable-gpu-vsync --renderer-process-limit=2 --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --js-flags=--max-old-space-size=256 --disable-background-networking'
-          
-          $envCode = @"
-          
-              // PAKE WEBVIEW2 FLAGS
-              std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "$flags");
-          "@
-          
-          if (Test-Path $mainRs) {
-            $content = Get-Content -Raw $mainRs
-            if ($content -match 'fn\s+main\s*\(\s*\)\s*\{') {
-              $content = $content -replace '(fn\s+main\s*\(\s*\)\s*\{)', "`$1$envCode"
-              Set-Content -Path $mainRs -Value $content -Encoding UTF8
-              Write-Host "Patched main.rs"
+          if (Test-Path $configPath) {
+            $json = Get-Content -Raw $configPath | ConvertFrom-Json -Depth 20
+            
+            # Set menu to null/empty
+            if ($json.tauri.PSObject.Properties['menu']) {
+              $json.tauri.menu = $null
             }
-          } elseif (Test-Path $libRs) {
-            $content = Get-Content -Raw $libRs
-            if ($content -match 'pub\s+fn\s+run\s*\(\s*\)') {
-              $content = $content -replace '(pub\s+fn\s+run\s*\(\s*\)\s*\{)', "`$1$envCode"
-              Set-Content -Path $libRs -Value $content -Encoding UTF8
-              Write-Host "Patched lib.rs"
+            
+            # Ensure decorations false and no menu
+            if ($json.tauri.windows -and $json.tauri.windows.Count -gt 0) {
+              $json.tauri.windows[0] | Add-Member -NotePropertyName "decorations" -NotePropertyValue $false -Force
             }
+            
+            $json | ConvertTo-Json -Depth 20 | Set-Content -Path $configPath -Encoding UTF8
+            Write-Host "Patched tauri.conf.json"
+            Get-Content $configPath | Select-Object -First 50
+          } else {
+            Write-Host "tauri.conf.json not found yet - will be created by pake"
           }
 
       # =========================================================================
-      # REMOVE MENU BAR
+      # REMOVE MENU - Method 2: Create custom build script
       # =========================================================================
-      - name: Remove Menu Bar
+      - name: Create Build Config Without Menu
+        working-directory: _pake
         shell: pwsh
         run: |
-          $menuRs = "_pake/src-tauri/src/app/menu.rs"
+          # Create pake.json config to control build
+          $pakeConfig = @{
+            url = "https://www.youtube.com"
+            name = "Youtube-GT"
+            width = 1100
+            height = 650
+            hide_title_bar = $true
+            menu = @{}
+          }
           
+          $pakeConfig | ConvertTo-Json -Depth 10 | Set-Content -Path "pake-config.json" -Encoding UTF8
+          Write-Host "Created pake-config.json"
+
+      # =========================================================================
+      # PATCH RUST SOURCE TO DISABLE MENU
+      # =========================================================================
+      - name: Patch Rust to Remove Menu
+        shell: pwsh
+        run: |
+          # Find all Rust files
+          $rustFiles = Get-ChildItem -Path "_pake/src-tauri/src" -Recurse -Filter "*.rs"
+          
+          foreach ($file in $rustFiles) {
+            $content = Get-Content -Raw $file.FullName
+            $modified = $false
+            
+            # Remove menu usage
+            if ($content -match '\.menu\(') {
+              $content = $content -replace '\.menu\([^)]*\)', ''
+              $content = $content -replace '\.menu\([^)]*\([^)]*\)[^)]*\)', ''
+              $modified = $true
+              Write-Host "Removed .menu() from $($file.Name)"
+            }
+            
+            # Remove menu imports
+            if ($content -match 'use.*menu') {
+              $content = $content -replace 'use\s+crate::app::menu[^;]*;', '// menu disabled'
+              $content = $content -replace 'mod\s+menu;', '// mod menu;'
+              $modified = $true
+              Write-Host "Removed menu imports from $($file.Name)"
+            }
+            
+            if ($modified) {
+              Set-Content -Path $file.FullName -Value $content -Encoding UTF8
+            }
+          }
+          
+          # Check for menu.rs and empty it
+          $menuRs = "_pake/src-tauri/src/app/menu.rs"
           if (Test-Path $menuRs) {
             $emptyMenu = @"
-          use tauri::{Menu, WindowMenuEvent, Wry};
-          
-          pub fn get_menu() -> Menu {
-              Menu::new()
-          }
-          
-          pub fn menu_event_handle(_event: WindowMenuEvent<Wry>) {}
-          "@
+use tauri::menu::Menu;
+use tauri::Wry;
+use tauri::AppHandle;
+
+pub fn get_menu(_app: &AppHandle) -> Option<Menu<Wry>> {
+    None
+}
+"@
             Set-Content -Path $menuRs -Value $emptyMenu -Encoding UTF8
-            Write-Host "Replaced menu.rs with empty menu"
+            Write-Host "Emptied menu.rs"
           }
-          
-          $mainRs = "_pake/src-tauri/src/main.rs"
-          if (Test-Path $mainRs) {
-            $content = Get-Content -Raw $mainRs
-            $content = $content -replace '\.menu\([^)]+\)', ''
-            Set-Content -Path $mainRs -Value $content -Encoding UTF8
-            Write-Host "Removed .menu() calls"
-          }
+
+      # =========================================================================
+      # SET WEBVIEW2 FLAGS VIA ENVIRONMENT
+      # =========================================================================
+      - name: Set WebView2 Environment
+        shell: pwsh
+        run: |
+          $flags = "--disable-smooth-scrolling --enable-low-end-device-mode --renderer-process-limit=2 --disable-backgrounding-occluded-windows --disable-gpu-vsync"
+          echo "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=$flags" >> $env:GITHUB_ENV
+          Write-Host "Set WebView2 flags: $flags"
 
       # =========================================================================
       # BUILD
@@ -242,10 +255,23 @@ jobs:
       - name: Build Pake App
         working-directory: _pake
         shell: pwsh
+        env:
+          WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: "--disable-smooth-scrolling --enable-low-end-device-mode --renderer-process-limit=2 --disable-backgrounding-occluded-windows"
         run: |
           $inject = Resolve-Path goodtube.js
-          Write-Host "Inject script: $inject"
+          Write-Host "Building with inject: $inject"
           
+          npx pake https://www.youtube.com --name Youtube-GT --targets x86_64-pc-windows-msvc --inject $inject --width 1100 --height 650 --hide-title-bar --no-menu
+
+      # =========================================================================
+      # FALLBACK BUILD (if --no-menu not supported)
+      # =========================================================================
+      - name: Fallback Build Without --no-menu
+        if: failure()
+        working-directory: _pake
+        shell: pwsh
+        run: |
+          $inject = Resolve-Path goodtube.js
           npx pake https://www.youtube.com --name Youtube-GT --targets x86_64-pc-windows-msvc --inject $inject --width 1100 --height 650 --hide-title-bar
 
       # =========================================================================
@@ -257,10 +283,11 @@ jobs:
           $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
             Copy-Item $msi.FullName Youtube-GT-x64.msi
-            Write-Host "MSI ready: Youtube-GT-x64.msi"
+            $size = [math]::Round($msi.Length/1MB, 2)
+            Write-Host "MSI ready: Youtube-GT-x64.msi ($size MB)"
           } else {
-            Write-Host "MSI not found"
-            Get-ChildItem -Path _pake -Recurse | Where-Object { $_.Extension -in '.msi','.exe' }
+            Write-Host "=== Looking for build output ==="
+            Get-ChildItem -Path "_pake" -Recurse | Where-Object { $_.Extension -match '\.(msi|exe)$' }
             exit 1
           }
 
