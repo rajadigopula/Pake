@@ -35,394 +35,221 @@ jobs:
         run: cargo update
 
       # =========================================================================
-      # A) CREATE COMPREHENSIVE YOUTUBE OPTIMIZATION SCRIPT
+      # CREATE YOUTUBE OPTIMIZATION SCRIPT
       # =========================================================================
-      - name: Create YouTube Optimization Script
+      - name: Download GoodTube
+        working-directory: _pake
+        run: |
+          curl -L "https://raw.githubusercontent.com/goodtube4u/goodtube/refs/heads/main/goodtube.js" -o goodtube.js
+
+      - name: Create Optimization Script
         working-directory: _pake
         shell: pwsh
         run: |
-          # Download GoodTube
-          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/goodtube4u/goodtube/refs/heads/main/goodtube.js" -OutFile goodtube.js
+          $script = @"
           
-          # Append comprehensive optimizations
-          $optimizations = @'
-
-// ============================================================================
-// PAKE YOUTUBE OPTIMIZER v1.0 - LOW RESOURCE / INTEL iGPU EDITION
-// ============================================================================
-(function() {
-  'use strict';
-
-  // -------------------------------------------------------------------------
-  // PERFORMANCE CSS - Kills GPU-Heavy Effects
-  // -------------------------------------------------------------------------
-  const PERF_CSS = `
-    /* === AMBIENT MODE - #1 GPU KILLER === */
-    #cinematics, #cinematics-container,
-    ytd-watch-flexy[theater] #player-container-inner::before,
-    .html5-video-container::after,
-    .ytp-gradient-top, .ytp-gradient-bottom { 
-      display: none !important; 
-      visibility: hidden !important;
-    }
-
-    /* === KILL ALL ANIMATIONS === */
-    *, *::before, *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-      scroll-behavior: auto !important;
-    }
-
-    /* === HOVER PREVIEW VIDEOS === */
-    ytd-thumbnail #mouseover-overlay,
-    ytd-thumbnail #hover-overlays,
-    #video-preview-container,
-    ytd-thumbnail-overlay-toggle-button-renderer { 
-      display: none !important; 
-    }
-
-    /* === TRANSPARENCY & BLUR EFFECTS === */
-    #guide-content, #masthead-container, ytd-masthead,
-    tp-yt-app-drawer, ytd-mini-guide-renderer {
-      backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
-      background: #0f0f0f !important;
-    }
-
-    /* === REMOVE SHADOWS & FILTERS === */
-    .ytp-cued-thumbnail-overlay-image,
-    .ytp-videowall-still-image { filter: none !important; }
-    ytd-rich-item-renderer, ytd-video-renderer,
-    ytd-compact-video-renderer { box-shadow: none !important; }
-
-    /* === HIDE MINI-PLAYER === */
-    ytd-miniplayer { display: none !important; }
-
-    /* === OPTIMIZE IMAGES === */
-    img.yt-core-image {
-      image-rendering: auto;
-      content-visibility: auto;
-    }
-
-    /* === SIMPLIFY SIDEBAR === */
-    #guide-inner-content ytd-guide-section-renderer:nth-child(n+4) { display: none !important; }
-
-    /* === HIDE ADS & PROMOS === */
-    ytd-mealbar-promo-renderer, #masthead-ad, ytd-ad-slot-renderer,
-    ytd-banner-promo-renderer, ytd-promoted-sparkles-web-renderer,
-    ytd-promoted-video-renderer, ytd-display-ad-renderer,
-    .ytp-ad-module, .video-ads, #player-ads,
-    ytd-companion-slot-renderer, ytd-movie-offer-module-renderer,
-    tp-yt-paper-dialog.ytd-popup-container { display: none !important; }
-
-    /* === SIMPLIFY VIDEO PLAYER === */
-    .ytp-ce-element, .ytp-cards-teaser { display: none !important; }
-    .annotation { display: none !important; }
-
-    /* === GPU COMPOSITING HINTS === */
-    #movie_player, .html5-video-container, video {
-      will-change: auto !important;
-      contain: layout style paint;
-    }
-    
-    /* === LIGHTWEIGHT SCROLLBAR === */
-    ::-webkit-scrollbar { width: 8px; background: #181818; }
-    ::-webkit-scrollbar-thumb { background: #333; }
-  `;
-
-  // -------------------------------------------------------------------------
-  // INJECT PERFORMANCE CSS
-  // -------------------------------------------------------------------------
-  const injectCSS = () => {
-    if (document.getElementById('pake-perf-css')) return;
-    const s = document.createElement('style');
-    s.id = 'pake-perf-css';
-    s.textContent = PERF_CSS;
-    (document.head || document.documentElement).appendChild(s);
-  };
-
-  // -------------------------------------------------------------------------
-  // LAZY LOAD THUMBNAILS
-  // -------------------------------------------------------------------------
-  const setupLazyLoad = () => {
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach(e => {
-        if (e.isIntersecting && e.target.dataset.pakeSrc) {
-          e.target.src = e.target.dataset.pakeSrc;
-          delete e.target.dataset.pakeSrc;
-        }
-      });
-    }, { rootMargin: '200px' });
-
-    const process = () => {
-      document.querySelectorAll('img.yt-core-image:not([data-pake])').forEach(img => {
-        img.setAttribute('data-pake', '1');
-        img.loading = 'lazy';
-        img.decoding = 'async';
-        io.observe(img);
-      });
-    };
-    process();
-    setInterval(process, 2500);
-  };
-
-  // -------------------------------------------------------------------------
-  // STOP PREVIEW VIDEOS (Saves CPU/GPU)
-  // -------------------------------------------------------------------------
-  const stopPreviews = () => {
-    const main = document.querySelector('#movie_player video');
-    if (main) main.dataset.pakeMain = '1';
-    
-    document.querySelectorAll('video:not([data-pake-main])').forEach(v => {
-      if (!v.closest('#movie_player')) {
-        v.pause();
-        v.removeAttribute('src');
-        v.load();
-      }
-    });
-  };
-
-  // -------------------------------------------------------------------------
-  // BLOCK TRACKING/ADS NETWORK REQUESTS
-  // -------------------------------------------------------------------------
-  const blockTracking = () => {
-    const blocked = [
-      'doubleclick', 'googlesyndication', 'googleadservices',
-      '/pagead/', '/ads/', 'log_event', 'generate_204', 
-      'stats/watchtime', 'ptracking', 'adformat'
-    ];
-    
-    const origFetch = window.fetch;
-    window.fetch = function(url) {
-      if (typeof url === 'string' && blocked.some(p => url.includes(p))) {
-        return Promise.resolve(new Response('', { status: 204 }));
-      }
-      return origFetch.apply(this, arguments);
-    };
-
-    const origOpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(m, url) {
-      this._blocked = typeof url === 'string' && blocked.some(p => url.includes(p));
-      return origOpen.apply(this, arguments);
-    };
-    const origSend = XMLHttpRequest.prototype.send;
-    XMLHttpRequest.prototype.send = function() {
-      if (this._blocked) return;
-      return origSend.apply(this, arguments);
-    };
-  };
-
-  // -------------------------------------------------------------------------
-  // VIDEO PLAYER OPTIMIZATIONS
-  // -------------------------------------------------------------------------
-  const optimizePlayer = () => {
-    const p = document.getElementById('movie_player');
-    if (!p) return;
-    try {
-      // Limit to 720p for weak GPUs
-      if (p.setPlaybackQualityRange) {
-        const q = p.getAvailableQualityLevels();
-        const current = p.getPlaybackQuality();
-        if (q.includes('hd720') && ['hd1080','hd1440','hd2160','highres'].includes(current)) {
-          p.setPlaybackQualityRange('hd720', 'hd720');
-        }
-      }
-      // Disable annotations
-      if (p.unloadModule) p.unloadModule('annotations_module');
-    } catch(e) {}
-  };
-
-  // -------------------------------------------------------------------------
-  // DOM CLEANUP
-  // -------------------------------------------------------------------------
-  const cleanup = () => {
-    [
-      'ytd-promoted-sparkles-web-renderer', 'ytd-promoted-video-renderer',
-      'ytd-display-ad-renderer', '#player-ads', '.ytp-ad-module'
-    ].forEach(s => document.querySelectorAll(s).forEach(el => el.remove()));
-  };
-
-  // -------------------------------------------------------------------------
-  // MEMORY MANAGEMENT
-  // -------------------------------------------------------------------------
-  const manageMemory = () => {
-    // Limit history depth
-    let depth = 0;
-    const origPush = history.pushState;
-    history.pushState = function() {
-      if (++depth > 25) depth = 10;
-      return origPush.apply(this, arguments);
-    };
-    
-    // Periodic garbage collection hint
-    setInterval(() => {
-      if (window.gc) window.gc();
-    }, 60000);
-  };
-
-  // -------------------------------------------------------------------------
-  // INITIALIZE
-  // -------------------------------------------------------------------------
-  const init = () => {
-    console.log('[Pake YT Optimizer] Starting...');
-    injectCSS();
-    setupLazyLoad();
-    blockTracking();
-    manageMemory();
-    setTimeout(() => { stopPreviews(); optimizePlayer(); cleanup(); }, 1500);
-    setInterval(stopPreviews, 3000);
-    setInterval(optimizePlayer, 5000);
-    setInterval(cleanup, 5000);
-    setInterval(injectCSS, 2000);
-    console.log('[Pake YT Optimizer] Active');
-  };
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
-
-  // Re-init on YouTube SPA navigation
-  let lastUrl = location.href;
-  new MutationObserver(() => {
-    if (location.href !== lastUrl) {
-      lastUrl = location.href;
-      setTimeout(init, 500);
-    }
-  }).observe(document.body || document.documentElement, { childList: true, subtree: true });
-
-})();
-'@
-          Add-Content -Path goodtube.js -Value $optimizations
-          Write-Host "Created optimization script"
+          // ============================================================================
+          // PAKE YOUTUBE OPTIMIZER - LOW RESOURCE EDITION
+          // ============================================================================
+          (function() {
+            'use strict';
+            
+            var PERF_CSS = [
+              '#cinematics, #cinematics-container { display: none !important; }',
+              'ytd-watch-flexy[theater] #player-container-inner::before { display: none !important; }',
+              '.ytp-gradient-top, .ytp-gradient-bottom { display: none !important; }',
+              '*, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }',
+              'ytd-thumbnail #mouseover-overlay, ytd-thumbnail #hover-overlays, #video-preview-container { display: none !important; }',
+              '#guide-content, #masthead-container, ytd-masthead { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: #0f0f0f !important; }',
+              '.ytp-cued-thumbnail-overlay-image, .ytp-videowall-still-image { filter: none !important; }',
+              'ytd-rich-item-renderer, ytd-video-renderer { box-shadow: none !important; }',
+              'ytd-miniplayer { display: none !important; }',
+              'img.yt-core-image { image-rendering: auto; content-visibility: auto; }',
+              '#guide-inner-content ytd-guide-section-renderer:nth-child(n+4) { display: none !important; }',
+              'ytd-mealbar-promo-renderer, #masthead-ad, ytd-ad-slot-renderer, ytd-banner-promo-renderer { display: none !important; }',
+              'ytd-promoted-sparkles-web-renderer, ytd-promoted-video-renderer, ytd-display-ad-renderer { display: none !important; }',
+              '.ytp-ad-module, .video-ads, #player-ads, ytd-companion-slot-renderer { display: none !important; }',
+              '.ytp-ce-element, .ytp-cards-teaser, .annotation { display: none !important; }',
+              '#movie_player, .html5-video-container, video { will-change: auto !important; contain: layout style paint; }',
+              '::-webkit-scrollbar { width: 8px; background: #181818; }',
+              '::-webkit-scrollbar-thumb { background: #333; }'
+            ].join(' ');
+            
+            function injectCSS() {
+              if (document.getElementById('pake-perf-css')) return;
+              var s = document.createElement('style');
+              s.id = 'pake-perf-css';
+              s.textContent = PERF_CSS;
+              (document.head || document.documentElement).appendChild(s);
+            }
+            
+            function setupLazyLoad() {
+              document.querySelectorAll('img.yt-core-image').forEach(function(img) {
+                img.loading = 'lazy';
+                img.decoding = 'async';
+              });
+            }
+            
+            function stopPreviews() {
+              var main = document.querySelector('#movie_player video');
+              if (main) main.dataset.pakeMain = '1';
+              document.querySelectorAll('video:not([data-pake-main])').forEach(function(v) {
+                if (!v.closest('#movie_player')) {
+                  v.pause();
+                  v.src = '';
+                }
+              });
+            }
+            
+            function blockTracking() {
+              var blocked = ['doubleclick', 'googlesyndication', 'googleadservices', '/pagead/', '/ads/', 'log_event'];
+              var origFetch = window.fetch;
+              window.fetch = function(url) {
+                if (typeof url === 'string') {
+                  for (var i = 0; i < blocked.length; i++) {
+                    if (url.indexOf(blocked[i]) !== -1) {
+                      return Promise.resolve(new Response('', { status: 204 }));
+                    }
+                  }
+                }
+                return origFetch.apply(this, arguments);
+              };
+            }
+            
+            function optimizePlayer() {
+              var p = document.getElementById('movie_player');
+              if (!p) return;
+              try {
+                if (p.setPlaybackQualityRange) {
+                  var q = p.getAvailableQualityLevels();
+                  var current = p.getPlaybackQuality();
+                  var highRes = ['hd1080','hd1440','hd2160','highres'];
+                  if (q.indexOf('hd720') !== -1 && highRes.indexOf(current) !== -1) {
+                    p.setPlaybackQualityRange('hd720', 'hd720');
+                  }
+                }
+                if (p.unloadModule) p.unloadModule('annotations_module');
+              } catch(e) {}
+            }
+            
+            function cleanup() {
+              var selectors = ['ytd-promoted-sparkles-web-renderer', 'ytd-promoted-video-renderer', 'ytd-display-ad-renderer', '#player-ads', '.ytp-ad-module'];
+              selectors.forEach(function(s) {
+                document.querySelectorAll(s).forEach(function(el) { el.remove(); });
+              });
+            }
+            
+            function init() {
+              console.log('[Pake YT Optimizer] Starting...');
+              injectCSS();
+              setupLazyLoad();
+              blockTracking();
+              setTimeout(function() { stopPreviews(); optimizePlayer(); cleanup(); }, 1500);
+              setInterval(stopPreviews, 3000);
+              setInterval(optimizePlayer, 5000);
+              setInterval(cleanup, 5000);
+              setInterval(injectCSS, 2000);
+              setInterval(setupLazyLoad, 3000);
+              console.log('[Pake YT Optimizer] Active');
+            }
+            
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', init);
+            } else {
+              init();
+            }
+            
+            var lastUrl = location.href;
+            setInterval(function() {
+              if (location.href !== lastUrl) {
+                lastUrl = location.href;
+                setTimeout(init, 500);
+              }
+            }, 1000);
+            
+          })();
+          "@
+          
+          Add-Content -Path goodtube.js -Value $script
+          Write-Host "Optimization script created"
 
       # =========================================================================
-      # B) PATCH RUST FOR WEBVIEW2 CHROMIUM FLAGS
+      # PATCH RUST FOR WEBVIEW2 FLAGS
       # =========================================================================
-      - name: Patch main.rs for WebView2 Optimization Flags
+      - name: Patch WebView2 Flags
         shell: pwsh
         run: |
           $mainRs = "_pake/src-tauri/src/main.rs"
+          $libRs = "_pake/src-tauri/src/lib.rs"
           
-          if (!(Test-Path $mainRs)) {
-            Write-Host "::warning::main.rs not found, creating lib.rs patch instead"
-            $mainRs = "_pake/src-tauri/src/lib.rs"
-          }
+          $flags = '--disable-features=msSmartScreenProtection,MediaRouter,Translate,BackForwardCache --enable-low-end-device-mode --disable-smooth-scrolling --disable-gpu-vsync --renderer-process-limit=2 --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --js-flags=--max-old-space-size=256 --disable-background-networking'
           
-          $content = Get-Content -Raw $mainRs
+          $envCode = @"
           
-          $webview2Code = @'
-
-    // === PAKE WEBVIEW2 LOW-RESOURCE FLAGS ===
-    std::env::set_var(
-        "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
-        "--disable-features=msSmartScreenProtection,MediaRouter,Translate,BackForwardCache,HardwareMediaKeyHandling \
-         --enable-features=TurnOffStreamingMediaCachingAlways \
-         --disable-smooth-scrolling \
-         --disable-gpu-vsync \
-         --enable-low-end-device-mode \
-         --disable-background-networking \
-         --disable-component-update \
-         --disable-sync \
-         --renderer-process-limit=2 \
-         --disable-backgrounding-occluded-windows \
-         --disable-renderer-backgrounding \
-         --js-flags=--max-old-space-size=256 \
-         --disable-hang-monitor \
-         --disable-ipc-flooding-protection"
-    );
-    // === END WEBVIEW2 FLAGS ===
-'@
+              // PAKE WEBVIEW2 FLAGS
+              std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "$flags");
+          "@
           
-          if ($content -match '(fn\s+main\s*\(\s*\)\s*\{)') {
-            $content = $content -replace '(fn\s+main\s*\(\s*\)\s*\{)', "`$1$webview2Code"
-            Set-Content -Path $mainRs -Value $content -Encoding UTF8
-            Write-Host "Patched main.rs with WebView2 flags"
-          } elseif ($content -match '(pub\s+fn\s+run\s*\(\s*\)\s*\{)') {
-            $content = $content -replace '(pub\s+fn\s+run\s*\(\s*\)\s*\{)', "`$1$webview2Code"
-            Set-Content -Path $mainRs -Value $content -Encoding UTF8
-            Write-Host "Patched lib.rs run() with WebView2 flags"
-          } else {
-            # Fallback: prepend to file
-            $webview2Init = @'
-// === PAKE WEBVIEW2 INIT ===
-fn init_webview2_flags() {
-    std::env::set_var(
-        "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
-        "--disable-smooth-scrolling --enable-low-end-device-mode --renderer-process-limit=2 --js-flags=--max-old-space-size=256 --disable-backgrounding-occluded-windows"
-    );
-}
-'@
-            $content = $webview2Init + "`n" + $content
-            Set-Content -Path $mainRs -Value $content -Encoding UTF8
-            Write-Host "::warning::Added WebView2 init function (needs manual call)"
+          if (Test-Path $mainRs) {
+            $content = Get-Content -Raw $mainRs
+            if ($content -match 'fn\s+main\s*\(\s*\)\s*\{') {
+              $content = $content -replace '(fn\s+main\s*\(\s*\)\s*\{)', "`$1$envCode"
+              Set-Content -Path $mainRs -Value $content -Encoding UTF8
+              Write-Host "Patched main.rs"
+            }
+          } elseif (Test-Path $libRs) {
+            $content = Get-Content -Raw $libRs
+            if ($content -match 'pub\s+fn\s+run\s*\(\s*\)') {
+              $content = $content -replace '(pub\s+fn\s+run\s*\(\s*\)\s*\{)', "`$1$envCode"
+              Set-Content -Path $libRs -Value $content -Encoding UTF8
+              Write-Host "Patched lib.rs"
+            }
           }
 
       # =========================================================================
-      # C) REMOVE MENU BAR
+      # REMOVE MENU BAR
       # =========================================================================
       - name: Remove Menu Bar
         shell: pwsh
         run: |
-          # Method 1: Patch menu.rs to return empty menu
           $menuRs = "_pake/src-tauri/src/app/menu.rs"
           
           if (Test-Path $menuRs) {
-            $emptyMenu = @'
-use tauri::{Menu, WindowMenuEvent, Wry};
-
-pub fn get_menu() -> Menu {
-    Menu::new()
-}
-
-pub fn menu_event_handle(_event: WindowMenuEvent<Wry>) {}
-'@
-            Set-Content -Path $menuRs -Value $emptyMenu -Encoding UTF8
-            Write-Host "Replaced menu.rs with empty menu"
-          } else {
-            Write-Host "menu.rs not found, trying alternative paths..."
-            
-            # Try to find menu-related files
-            $menuFiles = Get-ChildItem -Path "_pake/src-tauri/src" -Recurse -Filter "*menu*"
-            foreach ($f in $menuFiles) {
-              Write-Host "Found menu file: $($f.FullName)"
-            }
+            $emptyMenu = @"
+          use tauri::{Menu, WindowMenuEvent, Wry};
+          
+          pub fn get_menu() -> Menu {
+              Menu::new()
           }
           
-          # Method 2: Patch main.rs to use empty menu
+          pub fn menu_event_handle(_event: WindowMenuEvent<Wry>) {}
+          "@
+            Set-Content -Path $menuRs -Value $emptyMenu -Encoding UTF8
+            Write-Host "Replaced menu.rs with empty menu"
+          }
+          
           $mainRs = "_pake/src-tauri/src/main.rs"
           if (Test-Path $mainRs) {
             $content = Get-Content -Raw $mainRs
-            # Remove .menu() calls
             $content = $content -replace '\.menu\([^)]+\)', ''
             Set-Content -Path $mainRs -Value $content -Encoding UTF8
-            Write-Host "Removed .menu() calls from main.rs"
+            Write-Host "Removed .menu() calls"
           }
 
       # =========================================================================
-      # D) SET WEBVIEW2 ENV VAR FOR BUILD
+      # BUILD
       # =========================================================================
       - name: Build Pake App
         working-directory: _pake
         shell: pwsh
-        env:
-          WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: "--disable-smooth-scrolling --enable-low-end-device-mode"
         run: |
           $inject = Resolve-Path goodtube.js
           Write-Host "Inject script: $inject"
           
-          npx pake https://www.youtube.com `
-            --name Youtube-GT `
-            --targets x86_64-pc-windows-msvc `
-            --inject "$inject" `
-            --width 1100 `
-            --height 650 `
-            --hide-title-bar
+          npx pake https://www.youtube.com --name Youtube-GT --targets x86_64-pc-windows-msvc --inject $inject --width 1100 --height 650 --hide-title-bar
 
       # =========================================================================
-      # COLLECT & UPLOAD
+      # UPLOAD
       # =========================================================================
       - name: Find and Rename MSI
         shell: pwsh
@@ -430,10 +257,10 @@ pub fn menu_event_handle(_event: WindowMenuEvent<Wry>) {}
           $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
             Copy-Item $msi.FullName Youtube-GT-x64.msi
-            Write-Host "MSI ready: Youtube-GT-x64.msi ($([math]::Round($msi.Length/1MB, 2)) MB)"
+            Write-Host "MSI ready: Youtube-GT-x64.msi"
           } else {
-            Write-Host "::error::MSI not found"
-            Get-ChildItem -Path _pake -Recurse | Where-Object { $_.Extension -in '.msi','.exe' } | ForEach-Object { Write-Host $_.FullName }
+            Write-Host "MSI not found"
+            Get-ChildItem -Path _pake -Recurse | Where-Object { $_.Extension -in '.msi','.exe' }
             exit 1
           }
 
