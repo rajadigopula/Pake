@@ -114,6 +114,7 @@ jobs:
             --inject "$inject" `
             --width 1100 `
             --height 650
+            --hide-title-bar
 
       # -----------------------------------------------------------------------
       # COLLECT & UPLOAD MSI
