@@ -111,12 +111,12 @@ pub fn get_menu() -> Option<tauri::menu::Menu> {
       # -----------------------------------------------------------------------
       # DOWNLOAD & PATCH GOODTUBE USERSCRIPT (CSS/JS INJECTION)
       # -----------------------------------------------------------------------
-      - name: Download & patch GoodTube
+      - name: Download & Patch GoodTube
         working-directory: _pake
         shell: pwsh
         run: |
           curl -L "https://raw.githubusercontent.com/goodtube4u/goodtube/refs/heads/main/goodtube.js" -o goodtube.js
-          $optimizationCode = @'
+          $optimizationCode = @"
           // --- PAKE OPTIMIZATION INJECTION ---
           document.addEventListener('DOMContentLoaded', () => {
             const style = document.createElement('style');
@@ -133,8 +133,9 @@ pub fn get_menu() -> Option<tauri::menu::Menu> {
             document.head.appendChild(style);
             console.log('Pake Optimizations: Ambient mode and heavy effects disabled.');
           });
-          '@
+          "@
           Add-Content -Path goodtube.js -Value $optimizationCode
+
 
       # -----------------------------------------------------------------------
       # APPLY LOW-SPEC WEBVIEW2 SETTINGS (REGISTRY + ENV)
