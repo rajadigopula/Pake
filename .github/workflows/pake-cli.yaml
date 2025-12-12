@@ -38,10 +38,12 @@ jobs:
       # PATCH TAURI CONFIG TO REMOVE MENU BAR (WINDOW DECORATIONS)
       # -----------------------------------------------------------------------
       - name: Disable window decorations
-        working-directory: _pake/src-tauri/.pake
         shell: pwsh
         run: |
-          $configPath = "tauri.conf.json"
+          $configPath = "_pake/src-tauri/.pake/tauri.conf.json"
+          if (!(Test-Path $configPath)) {
+            throw "tauri.conf.json not found at $configPath"
+          }
           $json = Get-Content -Raw $configPath | ConvertFrom-Json
           if ($json.tauri.windows.Count -gt 0) {
             $json.tauri.windows[0].decorations = $false
@@ -83,11 +85,13 @@ jobs:
         working-directory: _pake
         shell: pwsh
         run: |
+          # 1. Runtime-wide WebView2 flags (user-level, safe)
           $regRoot = "HKCU:\Software\Microsoft\EdgeUpdate\ClientState\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
           if (!(Test-Path $regRoot)) { New-Item -Path $regRoot -Force | Out-Null }
           Set-ItemProperty -Path $regRoot -Name "AdditionalBrowserArguments" `
                            -Value "--disable-smooth-scrolling --disable-gpu-vsync" `
                            -Type String -Force
+          # 2. Optional: limit JS heap (V8)
           $envFile = "src-tauri/.env"
           Add-Content -Path $envFile -Value "TAURI_DEV_ARGS=--js-flags=--max-old-space-size=256"
 
