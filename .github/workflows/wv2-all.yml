@@ -138,7 +138,7 @@ jobs:
             --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,Translate,BackForwardCache
         run: |
           npx pake https://copilot.microsoft.com \
-            --name Qwen-Lite \
+            --name Copilot-Lite \
             --targets x86_64-pc-windows-msvc \
             --inject ./qwen-opt.js \
             --width 1000 \
