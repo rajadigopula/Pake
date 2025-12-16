@@ -1,0 +1,170 @@
+name: Build Qwen Lite Pake MSI
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-win:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Clone Pake
+        run: git clone https://github.com/tw93/pake.git _pake
+
+      - name: Install Pake Dependencies
+        working-directory: _pake
+        run: npm install
+
+      - name: Update Rust Dependencies
+        working-directory: _pake/src-tauri
+        run: cargo update
+
+      # =========================================================================
+      # 1. CREATE QWEN OPTIMIZATION SCRIPT
+      # =========================================================================
+      - name: Create Optimization Script
+        working-directory: _pake
+        shell: bash
+        run: |
+          cat >> qwen-opt.js << 'ENDSCRIPT'
+          (function() {
+            // PAKE QWEN LITE OPTIMIZER
+            // Purpose: Disable expensive rendering features to save RAM/CPU
+            const css = `
+              /* Kill expensive backdrop filters (blur effects) */
+              * {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+              }
+              /* Disable all animations/transitions */
+              *, *::before, *::after {
+                transition: none !important;
+                animation: none !important;
+              }
+              /* Optimize text rendering for speed */
+              body {
+                text-rendering: optimizeSpeed !important;
+                -webkit-font-smoothing: antialiased;
+              }
+              /* Reduce image decoding cost */
+              img { 
+                content-visibility: auto; 
+                decoding: async;
+              }
+            `;
+            const style = document.createElement('style');
+            style.textContent = css;
+            document.head.appendChild(style);
+            
+            // Force garbage collection hint (Chromium specific optimization)
+            if (window.gc) { setInterval(() => window.gc(), 60000); }
+            console.log('[Qwen Lite] Optimizations Loaded');
+          })();
+          ENDSCRIPT
+          
+          echo "Optimization script created"
+
+      # =========================================================================
+      # 2. PATCH RUST (REMOVE MENU + BINARY SIZE OPTIMIZATION)
+      # =========================================================================
+      - name: Optimize Rust Profile & Remove Menu
+        working-directory: _pake
+        shell: bash
+        run: |
+          # 1. Append size optimizations to Cargo.toml for a smaller .exe
+          cat >> src-tauri/Cargo.toml <<EOF
+          
+          [profile.release]
+          opt-level = "z"     # Optimize for binary size
+          lto = true          # Link Time Optimization
+          codegen-units = 1   # Maximum compression (slower build)
+          panic = "abort"     # Remove panic unwinding
+          strip = true        # Strip symbols
+          EOF
+
+          # 2. Patch menu.rs to completely remove the top bar
+          if [ -f "src-tauri/src/app/menu.rs" ]; then
+            cat > "src-tauri/src/app/menu.rs" << 'EOF'
+          use tauri::menu::Menu;
+          use tauri::Wry;
+          use tauri::AppHandle;
+
+          pub fn get_menu(_app: &AppHandle) -> Option<Menu<Wry>> {
+              None
+          }
+          EOF
+          fi
+          
+          # 3. Remove .menu() calls from main.rs
+          if [ -f "src-tauri/src/main.rs" ]; then
+            sed -i 's/\.menu([^)]*)//g' "src-tauri/src/main.rs"
+          fi
+          
+          # 4. Remove .menu() calls from lib.rs
+          if [ -f "src-tauri/src/lib.rs" ]; then
+            sed -i 's/\.menu([^)]*)//g' "src-tauri/src/lib.rs"
+          fi
+
+      # =========================================================================
+      # 3. BUILD WITH MEMORY FLAGS
+      # =========================================================================
+      - name: Build Qwen Lite App
+        working-directory: _pake
+        shell: bash
+        env:
+          # CRITICAL: These flags force the WebView to stay lightweight
+          # --renderer-process-limit=1: Forces single process (saves huge RAM)
+          # --enable-low-end-device-mode: Reduces caching memory usage
+          WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: >-
+            --renderer-process-limit=1
+            --enable-low-end-device-mode
+            --disable-smooth-scrolling
+            --disable-background-timer-throttling
+            --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,Translate,BackForwardCache
+        run: |
+          npx pake https://chat.qwen.ai \
+            --name Qwen-Lite \
+            --targets x86_64-pc-windows-msvc \
+            --inject ./qwen-opt.js \
+            --width 1000 \
+            --height 700 \
+            --hide-title-bar \
+            --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+      # =========================================================================
+      # 4. UPLOAD ARTIFACT
+      # =========================================================================
+      - name: Find and Rename MSI
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
+          if ($msi) {
+            Copy-Item $msi.FullName Qwen-Lite-x64.msi
+            Write-Host "MSI ready: Qwen-Lite-x64.msi"
+          } else {
+            Write-Host "MSI not found"
+            Get-ChildItem -Path _pake -Recurse -Include *.msi,*.exe
+            exit 1
+          }
+
+      - name: Upload MSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: Qwen-Lite-x64
+          path: Qwen-Lite-x64.msi
+          if-no-files-found: error
