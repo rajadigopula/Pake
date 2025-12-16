@@ -1,4 +1,4 @@
-name: Build Qwen Lite Pake MSI
+name: Build Copilot Lite Pake MSI
 
 on:
   push:
@@ -137,7 +137,7 @@ jobs:
             --disable-background-timer-throttling
             --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,Translate,BackForwardCache
         run: |
-          npx pake https://chat.qwen.ai \
+          npx pake https://copilot.microsoft.com \
             --name Qwen-Lite \
             --targets x86_64-pc-windows-msvc \
             --inject ./qwen-opt.js \
@@ -154,8 +154,8 @@ jobs:
         run: |
           $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
-            Copy-Item $msi.FullName Qwen-Lite-x64.msi
-            Write-Host "MSI ready: Qwen-Lite-x64.msi"
+            Copy-Item $msi.FullName Copilot-Lite-x64.msi
+            Write-Host "MSI ready: Copilot-Lite-x64.msi"
           } else {
             Write-Host "MSI not found"
             Get-ChildItem -Path _pake -Recurse -Include *.msi,*.exe
@@ -165,6 +165,6 @@ jobs:
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
-          name: Qwen-Lite-x64
-          path: Qwen-Lite-x64.msi
+          name: Copilot-Lite-x64
+          path: Copilot-Lite-x64.msi
           if-no-files-found: error
