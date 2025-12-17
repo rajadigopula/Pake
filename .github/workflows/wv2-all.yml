@@ -1,4 +1,4 @@
-name: Build Copilot Safe Pake MSI
+name: Build Qwen Lite Pake MSI
 
 on:
   push:
@@ -35,97 +35,170 @@ jobs:
         run: cargo update
 
       # =========================================================================
-      # 1. CREATE SAFE OPTIMIZATION SCRIPT (Fixes Login Issues)
+      # 1. CREATE QWEN OPTIMIZATION SCRIPT
       # =========================================================================
       - name: Create Optimization Script
         working-directory: _pake
         shell: bash
         run: |
-          cat >> copilot-safe.js << 'ENDSCRIPT'
-          (function() {
-            // SAFE COPILOT OPTIMIZER
-            // Purpose: Disable ONLY expensive visual effects without breaking layout/fonts
+          cat >> qwen-opt.js << 'ENDSCRIPT'
+          (function () {
+            // PAKE QWEN LITE OPTIMIZER (Windows / WebView2)
+            // Goal: minimize GPU, CPU, RAM usage without breaking React
+
+            /* ===============================
+               CSS HARD OPTIMIZATION
+            =============================== */
             const css = `
-              /* Disable blur effects on the main container only (saves GPU) */
-              .cib-serp-main, #app {
+              * {
                 backdrop-filter: none !important;
                 -webkit-backdrop-filter: none !important;
+                filter: none !important;
               }
-              /* Disable smooth scrolling for snappier feel */
-              * {
+
+              *, *::before, *::after {
+                animation: none !important;
+                transition: none !important;
                 scroll-behavior: auto !important;
               }
-              /* Do NOT disable transitions globally - it breaks MS Login animations */
+
+              * {
+                box-shadow: none !important;
+                text-shadow: none !important;
+                background-image: none !important;
+              }
+
+              body {
+                text-rendering: optimizeSpeed !important;
+                -webkit-font-smoothing: antialiased !important;
+              }
+
+              img, video {
+                content-visibility: auto;
+                contain-intrinsic-size: 300px 300px;
+                decoding: async;
+              }
+
+              .typing,
+              .cursor,
+              .blink,
+              [class*="typing"],
+              [class*="cursor"] {
+                animation: none !important;
+              }
             `;
+
             const style = document.createElement('style');
+            style.id = 'qwen-lite-style';
             style.textContent = css;
             document.head.appendChild(style);
-            
-            console.log('[Copilot Safe] Optimizations Loaded');
+
+            /* ===============================
+               JS RUNTIME OPTIMIZATION
+            =============================== */
+
+            const noop = () => {};
+
+            window.requestAnimationFrame = function (cb) {
+              return setTimeout(cb, 1000 / 30);
+            };
+
+            window.ResizeObserver = class {
+              observe = noop; unobserve = noop; disconnect = noop;
+            };
+
+            window.IntersectionObserver = class {
+              observe = noop; unobserve = noop; disconnect = noop;
+            };
+
+            if (window.requestIdleCallback) {
+              window.requestIdleCallback = function (cb) {
+                return setTimeout(cb, 2000);
+              };
+            }
+
+            if (window.gc) {
+              setInterval(() => {
+                try { window.gc(); } catch {}
+              }, 60000);
+            }
+
+            const mo = new MutationObserver(() => {
+              if (!document.getElementById('qwen-lite-style')) {
+                document.head.appendChild(style);
+              }
+            });
+
+            mo.observe(document.documentElement, {
+              childList: true,
+              subtree: true
+            });
+
+            console.log('[Qwen Lite] Pake optimizations loaded');
           })();
           ENDSCRIPT
 
+          echo "Optimization script created"
+
       # =========================================================================
-      # 2. PATCH RUST (Binary Size Optimization + Menu Removal)
+      # 2. PATCH RUST (REMOVE MENU + BINARY SIZE OPTIMIZATION)
       # =========================================================================
       - name: Optimize Rust Profile & Remove Menu
         working-directory: _pake
         shell: bash
         run: |
-          # 1. Append size optimizations to Cargo.toml
           cat >> src-tauri/Cargo.toml <<EOF
-          
+
           [profile.release]
-          opt-level = "z"     # Optimize for size
-          lto = true          # Link Time Optimization
-          codegen-units = 1   # Slow build, fast/small binary
-          panic = "abort"     # Remove panic unwinding
-          strip = true        # Strip symbols
+          opt-level = "z"
+          lto = true
+          codegen-units = 1
+          panic = "abort"
+          strip = true
           EOF
 
-          # 2. Patch menu.rs to REMOVE the top menu bar completely
-          # We overwrite the file to force it to return None
-          mkdir -p src-tauri/src/app
-          cat > "src-tauri/src/app/menu.rs" << 'EOF'
+          if [ -f "src-tauri/src/app/menu.rs" ]; then
+            cat > "src-tauri/src/app/menu.rs" << 'EOF'
           use tauri::menu::Menu;
           use tauri::Wry;
           use tauri::AppHandle;
 
           pub fn get_menu(_app: &AppHandle) -> Option<Menu<Wry>> {
-              // Return None to disable the menu bar
               None
           }
           EOF
-          
-          # 3. Patch main.rs to ensure the menu is actually disabled
-          # We look for the line that attaches the menu and comment it out or remove it
+          fi
+
           if [ -f "src-tauri/src/main.rs" ]; then
-             sed -i 's/\.menu(app_menu)//g' "src-tauri/src/main.rs"
-             sed -i 's/\.menu(menu)//g' "src-tauri/src/main.rs"
+            sed -i 's/\.menu([^)]*)//g' "src-tauri/src/main.rs"
+          fi
+
+          if [ -f "src-tauri/src/lib.rs" ]; then
+            sed -i 's/\.menu([^)]*)//g' "src-tauri/src/lib.rs"
           fi
 
       # =========================================================================
-      # 3. BUILD WITH SAFE FLAGS (No Process Limit)
+      # 3. BUILD WITH MEMORY FLAGS
       # =========================================================================
-      - name: Build Copilot App
+      - name: Build Qwen Lite App
         working-directory: _pake
         shell: bash
         env:
-          # CRITICAL: Removed "renderer-process-limit" and "low-end-device-mode"
-          # Added "Edg/" User-Agent so Microsoft recognizes the browser
           WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: >-
+            --renderer-process-limit=1
+            --enable-low-end-device-mode
             --disable-smooth-scrolling
             --disable-background-timer-throttling
-            --disable-features=Translate,BackForwardCache,msSmartScreenProtection
+            --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,Translate,BackForwardCache
         run: |
-          npx pake https://copilot.microsoft.com \
-            --name Copilot-Lite \
+          npx pake https://chat.qwen.ai \
+            --name Qwen-Lite \
             --targets x86_64-pc-windows-msvc \
-            --inject ./copilot-safe.js \
-            --width 1100 \
-            --height 750 \
+            --inject ./qwen-opt.js \
+            --width 1000 \
+            --height 700 \
             --hide-title-bar \
-            --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
+            --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
       # =========================================================================
       # 4. UPLOAD ARTIFACT
@@ -135,8 +208,8 @@ jobs:
         run: |
           $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
-            Copy-Item $msi.FullName Copilot-Lite-x64.msi
-            Write-Host "MSI ready: Copilot-Safe-x64.msi"
+            Copy-Item $msi.FullName Qwen-Lite-x64.msi
+            Write-Host "MSI ready: Qwen-Lite-x64.msi"
           } else {
             Write-Host "MSI not found"
             Get-ChildItem -Path _pake -Recurse -Include *.msi,*.exe
@@ -146,12 +219,6 @@ jobs:
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
-          name: Copilot-Lite-x64
-          path: Copilot-Lite-x64.msi
+          name: Qwen-Lite-x64
+          path: Qwen-Lite-x64.msi
           if-no-files-found: error
-
-
-
-
-
-          
