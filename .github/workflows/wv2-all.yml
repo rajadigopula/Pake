@@ -1,4 +1,4 @@
-name: Build Qwen Lite Pake MSI
+name: Build Thesys Lite Pake MSI
 
 on:
   push:
@@ -35,16 +35,16 @@ jobs:
         run: cargo update
 
       # =========================================================================
-      # 1. CREATE QWEN OPTIMIZATION SCRIPT
+      # 1. CREATE THESYS OPTIMIZATION SCRIPT
       # =========================================================================
       - name: Create Optimization Script
         working-directory: _pake
         shell: bash
         run: |
-          cat >> qwen-opt.js << 'ENDSCRIPT'
+          cat >> thesys-opt.js << 'ENDSCRIPT'
           (function () {
-            // PAKE QWEN LITE OPTIMIZER (Windows / WebView2)
-            // Goal: minimize GPU, CPU, RAM usage without breaking React
+            // PAKE THESYS LITE OPTIMIZER (Windows / WebView2)
+            // Goal: minimize GPU, CPU, RAM usage
 
             /* ===============================
                CSS HARD OPTIMIZATION
@@ -78,18 +78,10 @@ jobs:
                 contain-intrinsic-size: 300px 300px;
                 decoding: async;
               }
-
-              .typing,
-              .cursor,
-              .blink,
-              [class*="typing"],
-              [class*="cursor"] {
-                animation: none !important;
-              }
             `;
 
             const style = document.createElement('style');
-            style.id = 'qwen-lite-style';
+            style.id = 'thesys-lite-style';
             style.textContent = css;
             document.head.appendChild(style);
 
@@ -124,7 +116,7 @@ jobs:
             }
 
             const mo = new MutationObserver(() => {
-              if (!document.getElementById('qwen-lite-style')) {
+              if (!document.getElementById('thesys-lite-style')) {
                 document.head.appendChild(style);
               }
             });
@@ -134,7 +126,7 @@ jobs:
               subtree: true
             });
 
-            console.log('[Qwen Lite] Pake optimizations loaded');
+            console.log('[Thesys Lite] Pake optimizations loaded');
           })();
           ENDSCRIPT
 
@@ -180,7 +172,7 @@ jobs:
       # =========================================================================
       # 3. BUILD WITH MEMORY FLAGS
       # =========================================================================
-      - name: Build Qwen Lite App
+      - name: Build Thesys Lite App
         working-directory: _pake
         shell: bash
         env:
@@ -191,10 +183,10 @@ jobs:
             --disable-background-timer-throttling
             --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,Translate,BackForwardCache
         run: |
-          npx pake https://chat.qwen.ai \
-            --name Qwen-Lite \
+          npx pake https://console.thesys.dev/ \
+            --name Thesys-Lite \
             --targets x86_64-pc-windows-msvc \
-            --inject ./qwen-opt.js \
+            --inject ./thesys-opt.js \
             --width 1000 \
             --height 700 \
             --hide-title-bar \
@@ -208,8 +200,8 @@ jobs:
         run: |
           $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
-            Copy-Item $msi.FullName Qwen-Lite-x64.msi
-            Write-Host "MSI ready: Qwen-Lite-x64.msi"
+            Copy-Item $msi.FullName Thesys-Lite-x64.msi
+            Write-Host "MSI ready: Thesys-Lite-x64.msi"
           } else {
             Write-Host "MSI not found"
             Get-ChildItem -Path _pake -Recurse -Include *.msi,*.exe
@@ -219,6 +211,6 @@ jobs:
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
-          name: Qwen-Lite-x64
-          path: Qwen-Lite-x64.msi
+          name: Thesys-Lite-x64
+          path: Thesys-Lite-x64.msi
           if-no-files-found: error
