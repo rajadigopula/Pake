@@ -1,4 +1,4 @@
-name: Build Thesys Lite Pake MSI
+name: Build NotebookLM Desktop MSI
 
 on:
   push:
@@ -35,37 +35,39 @@ jobs:
         run: cargo update
 
       # =========================================================================
-      # 1. CREATE THESYS OPTIMIZATION SCRIPT
+      # 1. CREATE NOTEBOOKLM OPTIMIZATION SCRIPT
       # =========================================================================
       - name: Create Optimization Script
         working-directory: _pake
         shell: bash
         run: |
-          cat >> thesys-opt.js << 'ENDSCRIPT'
+          cat >> notebooklm-opt.js << 'ENDSCRIPT'
           (function () {
-            // PAKE THESYS LITE OPTIMIZER (Windows / WebView2)
-            // Goal: minimize GPU, CPU, RAM usage
+            // NOTEBOOKLM DESKTOP OPTIMIZER (Windows / WebView2)
+            // Goal: minimize GPU, CPU, RAM usage for text-heavy workflows
 
             /* ===============================
                CSS HARD OPTIMIZATION
             =============================== */
             const css = `
+              /* Disable costly effects */
               * {
                 backdrop-filter: none !important;
                 -webkit-backdrop-filter: none !important;
                 filter: none !important;
               }
 
+              /* Disable animations for snap-feel */
               *, *::before, *::after {
                 animation: none !important;
                 transition: none !important;
                 scroll-behavior: auto !important;
               }
 
+              /* Reduce rendering cost */
               * {
                 box-shadow: none !important;
                 text-shadow: none !important;
-                background-image: none !important;
               }
 
               body {
@@ -73,6 +75,7 @@ jobs:
                 -webkit-font-smoothing: antialiased !important;
               }
 
+              /* Lazy load media */
               img, video {
                 content-visibility: auto;
                 contain-intrinsic-size: 300px 300px;
@@ -81,7 +84,7 @@ jobs:
             `;
 
             const style = document.createElement('style');
-            style.id = 'thesys-lite-style';
+            style.id = 'notebooklm-lite-style';
             style.textContent = css;
             document.head.appendChild(style);
 
@@ -91,32 +94,21 @@ jobs:
 
             const noop = () => {};
 
+            // Throttle animations
             window.requestAnimationFrame = function (cb) {
-              return setTimeout(cb, 1000 / 30);
+              return setTimeout(cb, 1000 / 30); // Cap at 30fps for UI
             };
 
-            window.ResizeObserver = class {
-              observe = noop; unobserve = noop; disconnect = noop;
-            };
-
-            window.IntersectionObserver = class {
-              observe = noop; unobserve = noop; disconnect = noop;
-            };
-
-            if (window.requestIdleCallback) {
-              window.requestIdleCallback = function (cb) {
-                return setTimeout(cb, 2000);
-              };
-            }
-
+            // Aggressive Garbage Collection trigger (if available in WebView2 context)
             if (window.gc) {
               setInterval(() => {
                 try { window.gc(); } catch {}
               }, 60000);
             }
 
+            // Persistence observer to ensure styles remain applied after hydration
             const mo = new MutationObserver(() => {
-              if (!document.getElementById('thesys-lite-style')) {
+              if (!document.getElementById('notebooklm-lite-style')) {
                 document.head.appendChild(style);
               }
             });
@@ -126,11 +118,11 @@ jobs:
               subtree: true
             });
 
-            console.log('[Thesys Lite] Pake optimizations loaded');
+            console.log('[NotebookLM Desktop] Optimizations loaded');
           })();
           ENDSCRIPT
 
-          echo "Optimization script created"
+          echo "Optimization script created: notebooklm-opt.js"
 
       # =========================================================================
       # 2. PATCH RUST (REMOVE MENU + BINARY SIZE OPTIMIZATION)
@@ -139,6 +131,7 @@ jobs:
         working-directory: _pake
         shell: bash
         run: |
+          # Append aggressive optimization flags to Cargo.toml
           cat >> src-tauri/Cargo.toml <<EOF
 
           [profile.release]
@@ -149,6 +142,7 @@ jobs:
           strip = true
           EOF
 
+          # Remove default menu logic to save space and reduce clutter
           if [ -f "src-tauri/src/app/menu.rs" ]; then
             cat > "src-tauri/src/app/menu.rs" << 'EOF'
           use tauri::menu::Menu;
@@ -161,6 +155,7 @@ jobs:
           EOF
           fi
 
+          # Clean up references to menu in main files
           if [ -f "src-tauri/src/main.rs" ]; then
             sed -i 's/\.menu([^)]*)//g' "src-tauri/src/main.rs"
           fi
@@ -172,10 +167,11 @@ jobs:
       # =========================================================================
       # 3. BUILD WITH MEMORY FLAGS
       # =========================================================================
-      - name: Build Thesys Lite App
+      - name: Build NotebookLM App
         working-directory: _pake
         shell: bash
         env:
+          # Force WebView2 into a constrained resource mode
           WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: >-
             --renderer-process-limit=1
             --enable-low-end-device-mode
@@ -183,14 +179,15 @@ jobs:
             --disable-background-timer-throttling
             --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,Translate,BackForwardCache
         run: |
-          npx pake https://console.thesys.dev/ \
-            --name Thesys-Lite \
+          # UA Updated to Chrome 124 to ensure Google Auth compatibility
+          npx pake https://notebooklm.google/ \
+            --name NotebookLM-Desktop \
             --targets x86_64-pc-windows-msvc \
-            --inject ./thesys-opt.js \
-            --width 1000 \
-            --height 700 \
+            --inject ./notebooklm-opt.js \
+            --width 1200 \
+            --height 800 \
             --hide-title-bar \
-            --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
       # =========================================================================
       # 4. UPLOAD ARTIFACT
@@ -200,8 +197,8 @@ jobs:
         run: |
           $msi = Get-ChildItem -Path _pake -Recurse -Filter "*.msi" | Select-Object -First 1
           if ($msi) {
-            Copy-Item $msi.FullName Thesys-Lite-x64.msi
-            Write-Host "MSI ready: Thesys-Lite-x64.msi"
+            Copy-Item $msi.FullName NotebookLM-Desktop-x64.msi
+            Write-Host "MSI ready: NotebookLM-Desktop-x64.msi"
           } else {
             Write-Host "MSI not found"
             Get-ChildItem -Path _pake -Recurse -Include *.msi,*.exe
@@ -211,6 +208,6 @@ jobs:
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
-          name: Thesys-Lite-x64
-          path: Thesys-Lite-x64.msi
+          name: NotebookLM-Desktop-x64
+          path: NotebookLM-Desktop-x64.msi
           if-no-files-found: error
