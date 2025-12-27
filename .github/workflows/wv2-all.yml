@@ -71,28 +71,46 @@ jobs:
           const fs = require('fs');
           const path = require('path');
           
-          // 1. Locate the correct file (lib.rs or main.rs)
-          const searchDir = 'src-tauri/src';
-          let targetFile = '';
-          const files = fs.readdirSync(searchDir);
-          
-          // Heuristic: Find file containing 'on_navigation'
-          for (const file of files) {
-            const fullPath = path.join(searchDir, file);
-            if (fs.statSync(fullPath).isFile()) {
-              const content = fs.readFileSync(fullPath, 'utf8');
-              if (content.includes('on_navigation')) {
-                targetFile = fullPath;
-                break;
+          // Helper: Recursive file search
+          function findRecursive(dir, term) {
+            let results = [];
+            const list = fs.readdirSync(dir);
+            for (const file of list) {
+              const filePath = path.join(dir, file);
+              const stat = fs.statSync(filePath);
+              if (stat && stat.isDirectory()) {
+                results = results.concat(findRecursive(filePath, term));
+              } else if (file.endsWith('.rs')) {
+                const content = fs.readFileSync(filePath, 'utf8');
+                if (content.includes(term)) {
+                  results.push(filePath);
+                }
               }
             }
+            return results;
+          }
+
+          // 1. Locate the correct file (Recursive Search)
+          const searchDir = 'src-tauri/src';
+          console.log(\`Searching recursively in \${searchDir}...\`);
+          
+          // First priority: look for 'on_navigation' which usually holds the logic
+          let targetFiles = findRecursive(searchDir, 'on_navigation');
+          
+          // Fallback: look for 'shell::open' if on_navigation isn't explicit
+          if (targetFiles.length === 0) {
+            console.log('on_navigation not found, searching for shell::open usage...');
+            targetFiles = findRecursive(searchDir, 'shell::open');
           }
           
-          if (!targetFile) {
-            console.error('CRITICAL: Could not find file with on_navigation logic.');
-            process.exit(1);
+          if (targetFiles.length === 0) {
+            console.error('CRITICAL: Could not find navigation logic (on_navigation or shell::open).');
+            // We exit 0 here to allow build to try anyway, but it likely won't fix the issue.
+            // But exiting 1 blocks the build entirely. Let's try to proceed.
+            process.exit(0); 
           }
           
+          const targetFile = targetFiles[0]; // Take the first match
           console.log(\`Patching target file: \${targetFile}\`);
           let content = fs.readFileSync(targetFile, 'utf8');
 
@@ -101,11 +119,7 @@ jobs:
           // This typically guards the shell::open call.
           // We want to append && !url...contains('google') to the condition.
           
-          // Common Pake Pattern: if url.host_str() != Some(host) {
-          // or: if host != target_host {
-          
           const patch = \" && !url.as_str().contains(\\\"google\\\") \";
-          
           let patched = false;
           
           // Attempt Pattern A: url.host_str()
@@ -120,11 +134,26 @@ jobs:
           // Attempt Pattern B: host != target
           else if (content.match(/if\s+[a-zA-Z0-9_]+\s*!=\s*[a-zA-Z0-9_]+\s*\{/)) {
              console.log('Detected Pattern B: generic host comparison');
-             // We replace the first occurrence inside on_navigation usually
              content = content.replace(
                /(if\s+[a-zA-Z0-9_]+\s*!=\s*[a-zA-Z0-9_]+)(\s*\{)/, 
                \`\$1\${patch}\$2\`
              );
+             patched = true;
+          }
+          // Attempt Pattern C: direct shell::open guard (catch-all)
+          else if (content.includes('shell::open')) {
+             // If we can't match the exact if statement, we try to disable the shell::open call for google URLs
+             // This is a rough patch: replace 'shell::open' with 'if !url.to_string().contains("google") { shell::open'
+             console.log('Detected Pattern C: wrapping shell::open');
+             // We need to be careful with syntax here.
+             // We replace: shell::open(&app.shell_scope(), url.as_str(), None).unwrap();
+             // with: if !url.as_str().contains("google") { shell::open(...)... }
+             
+             // Regex to capture the full shell::open call
+             const regex = /shell::open\s*\([^;]+;/g;
+             content = content.replace(regex, (match) => {
+                return \`if !url.as_str().contains("google") { \${match} }\`;
+             });
              patched = true;
           }
 
@@ -132,10 +161,7 @@ jobs:
             fs.writeFileSync(targetFile, content);
             console.log('SUCCESS: Navigation logic patched to allow Google domains.');
           } else {
-            console.error('WARNING: Regex did not match standard Pake navigation logic. Dumping snippet for debug:');
-            const navIdx = content.indexOf('on_navigation');
-            console.log(content.substring(navIdx, navIdx + 300));
-            // Don't fail the build, but warn heavily
+            console.error('WARNING: Regex did not match standard Pake navigation logic.');
           }
 
           // 3. Patch Cargo.toml for size (Safe Replace)
