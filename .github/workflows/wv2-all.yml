@@ -44,42 +44,21 @@ jobs:
           cat >> notebooklm-opt.js << 'ENDSCRIPT'
           (function () {
             // NOTEBOOKLM DESKTOP OPTIMIZER (Windows / WebView2)
-            // Goal: minimize GPU, CPU, RAM usage for text-heavy workflows
-
-            /* ===============================
-               CSS HARD OPTIMIZATION
-            =============================== */
+            
+            // CSS: Cosmetic cleanups only. 
+            // Removed aggressive rendering blocks that might hide auth popups.
             const css = `
-              /* Disable costly effects */
-              * {
-                backdrop-filter: none !important;
-                -webkit-backdrop-filter: none !important;
-                filter: none !important;
-              }
-
-              /* Disable animations for snap-feel */
-              *, *::before, *::after {
-                animation: none !important;
-                transition: none !important;
-                scroll-behavior: auto !important;
-              }
-
-              /* Reduce rendering cost */
-              * {
-                box-shadow: none !important;
-                text-shadow: none !important;
-              }
-
               body {
-                text-rendering: optimizeSpeed !important;
                 -webkit-font-smoothing: antialiased !important;
               }
-
-              /* Lazy load media */
-              img, video {
-                content-visibility: auto;
-                contain-intrinsic-size: 300px 300px;
-                decoding: async;
+              /* Ensure scrollbars are visible for agreement texts */
+              ::-webkit-scrollbar {
+                width: 8px;
+                height: 8px;
+              }
+              ::-webkit-scrollbar-thumb {
+                background: #ccc;
+                border-radius: 4px;
               }
             `;
 
@@ -88,57 +67,23 @@ jobs:
             style.textContent = css;
             document.head.appendChild(style);
 
-            /* ===============================
-               JS RUNTIME OPTIMIZATION
-            =============================== */
-
-            const noop = () => {};
-
-            // Throttle animations
-            window.requestAnimationFrame = function (cb) {
-              return setTimeout(cb, 1000 / 30); // Cap at 30fps for UI
-            };
-
-            // Aggressive Garbage Collection trigger (if available in WebView2 context)
-            if (window.gc) {
-              setInterval(() => {
-                try { window.gc(); } catch {}
-              }, 60000);
-            }
-
-            // Persistence observer to ensure styles remain applied after hydration
-            const mo = new MutationObserver(() => {
-              if (!document.getElementById('notebooklm-lite-style')) {
-                document.head.appendChild(style);
-              }
-            });
-
-            mo.observe(document.documentElement, {
-              childList: true,
-              subtree: true
-            });
-
-            console.log('[NotebookLM Desktop] Optimizations loaded');
+            console.log('[NotebookLM Desktop] UI Optimizations loaded');
           })();
           ENDSCRIPT
 
-          echo "Optimization script created: notebooklm-opt.js"
-
       # =========================================================================
-      # 2. PATCH RUST (REMOVE MENU + BINARY SIZE OPTIMIZATION)
+      # 2. PATCH RUST (LOGIC & CONFIG)
       # =========================================================================
-      - name: Optimize Rust Profile & Remove Menu
+      - name: Patch Rust Logic
         working-directory: _pake
         shell: bash
         run: |
-          # 1. Use Node to safely replace the profile section (avoids TOML parse errors)
+          # 1. Apply Deterministic Profile (Binary Size) via Node
           node -e "
             const fs = require('fs');
             const path = 'src-tauri/Cargo.toml';
             let content = fs.readFileSync(path, 'utf8');
-            // Remove existing [profile.release] and everything until next section or EOF
             content = content.replace(/\[profile\.release\][\s\S]*?(?=(\[|$))/g, '');
-            
             const newProfile = \`
           [profile.release]
           opt-level = 'z'
@@ -148,55 +93,63 @@ jobs:
           strip = true
           \`;
             fs.writeFileSync(path, content.trim() + '\n' + newProfile);
-            console.log('Cargo.toml patched with deterministic profile.');
+            console.log('Cargo.toml patched.');
           "
 
-          # 2. Remove default menu logic to save space and reduce clutter
+          # 2. Remove Menu (Cosmetic)
           if [ -f "src-tauri/src/app/menu.rs" ]; then
             cat > "src-tauri/src/app/menu.rs" << 'EOF'
           use tauri::menu::Menu;
           use tauri::Wry;
           use tauri::AppHandle;
-
-          pub fn get_menu(_app: &AppHandle) -> Option<Menu<Wry>> {
-              None
-          }
+          pub fn get_menu(_app: &AppHandle) -> Option<Menu<Wry>> { None }
           EOF
           fi
+          # Clean up menu refs
+          sed -i 's/\.menu([^)]*)//g' "src-tauri/src/main.rs" 2>/dev/null || true
+          sed -i 's/\.menu([^)]*)//g' "src-tauri/src/lib.rs" 2>/dev/null || true
 
-          # 3. Clean up references to menu in main files
-          if [ -f "src-tauri/src/main.rs" ]; then
-            sed -i 's/\.menu([^)]*)//g' "src-tauri/src/main.rs"
-          fi
-
-          if [ -f "src-tauri/src/lib.rs" ]; then
-            sed -i 's/\.menu([^)]*)//g' "src-tauri/src/lib.rs"
+          # 3. CRITICAL: PATCH NAVIGATION LOGIC FOR GOOGLE AUTH
+          # Pake attempts to open external domains in system browser. 
+          # We must whitelist 'google.com' to stay inside the WebView.
+          # We search for the logic that checks the domain and inject a bypass.
+          
+          # Target file: usually src-tauri/src/lib.rs where the navigation handler lives
+          TARGET_FILE=$(find src-tauri/src -name "lib.rs" -o -name "main.rs" | xargs grep -l "on_navigation" | head -n 1)
+          
+          if [ -z "$TARGET_FILE" ]; then
+             echo "WARNING: Could not find navigation handler. Auth might fail."
+          else
+             echo "Patching navigation handler in $TARGET_FILE"
+             # This sed command looks for the block that decides to open shell and adds an exception for google.com
+             # It's a heuristic replace: if url domain != host, check if it contains google.com
+             # We simply force the browser to NOT open shell if url contains 'google.com'
+             
+             # Note: This is a simplistic patch. Pake's logic is complex. 
+             # A safer bet for Pake v3 is to rely on the User Agent and not forcing shell open.
+             # We will attempt to disable the 'open in browser' logic for google domains.
+             
+             # Replacing the shell_open command trigger
+             sed -i 's/if.*host != target_host.*/if host != target_host \&\& !url.as_str().contains("google.com") \&\& !url.as_str().contains("googleusercontent.com")/' "$TARGET_FILE"
           fi
 
       # =========================================================================
-      # 3. BUILD WITH MEMORY FLAGS
+      # 3. BUILD (NO RESTRICTIVE FLAGS)
       # =========================================================================
       - name: Build NotebookLM App
         working-directory: _pake
         shell: bash
-        env:
-          # Force WebView2 into a constrained resource mode
-          WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: >-
-            --renderer-process-limit=1
-            --enable-low-end-device-mode
-            --disable-smooth-scrolling
-            --disable-background-timer-throttling
-            --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,Translate,BackForwardCache
+        # Removed WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS entirely.
+        # This restores multi-process rendering required for Auth popups.
         run: |
-          # UA Updated to Chrome 124 to ensure Google Auth compatibility
           npx pake https://notebooklm.google/ \
             --name NotebookLM-Desktop \
             --targets x86_64-pc-windows-msvc \
             --inject ./notebooklm-opt.js \
             --width 1200 \
-            --height 800 \
+            --height 900 \
             --hide-title-bar \
-            --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
 
       # =========================================================================
       # 4. UPLOAD ARTIFACT
