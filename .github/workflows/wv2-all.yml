@@ -131,18 +131,27 @@ jobs:
         working-directory: _pake
         shell: bash
         run: |
-          # Append aggressive optimization flags to Cargo.toml
-          cat >> src-tauri/Cargo.toml <<EOF
-
+          # 1. Use Node to safely replace the profile section (avoids TOML parse errors)
+          node -e "
+            const fs = require('fs');
+            const path = 'src-tauri/Cargo.toml';
+            let content = fs.readFileSync(path, 'utf8');
+            // Remove existing [profile.release] and everything until next section or EOF
+            content = content.replace(/\[profile\.release\][\s\S]*?(?=(\[|$))/g, '');
+            
+            const newProfile = \`
           [profile.release]
-          opt-level = "z"
+          opt-level = 'z'
           lto = true
           codegen-units = 1
-          panic = "abort"
+          panic = 'abort'
           strip = true
-          EOF
+          \`;
+            fs.writeFileSync(path, content.trim() + '\n' + newProfile);
+            console.log('Cargo.toml patched with deterministic profile.');
+          "
 
-          # Remove default menu logic to save space and reduce clutter
+          # 2. Remove default menu logic to save space and reduce clutter
           if [ -f "src-tauri/src/app/menu.rs" ]; then
             cat > "src-tauri/src/app/menu.rs" << 'EOF'
           use tauri::menu::Menu;
@@ -155,7 +164,7 @@ jobs:
           EOF
           fi
 
-          # Clean up references to menu in main files
+          # 3. Clean up references to menu in main files
           if [ -f "src-tauri/src/main.rs" ]; then
             sed -i 's/\.menu([^)]*)//g' "src-tauri/src/main.rs"
           fi
