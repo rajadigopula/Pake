@@ -120,9 +120,10 @@ jobs:
                 content = content.replace(regex, (match, varName) => {
                     console.log(\`Injecting Google whitelist for variable: \${varName}\`);
                     // The Injection:
+                    // NOTE: Escaped quotes (\"google\") to prevent Bash from stripping them.
                     return \`\${match} 
                     // [PATCH] Allow Google Auth Redirects
-                    if \${varName}.as_str().contains("google") || \${varName}.as_str().contains("gstatic") { 
+                    if \${varName}.as_str().contains(\"google\") || \${varName}.as_str().contains(\"gstatic\") { 
                         return true; 
                     }
                     \`;
