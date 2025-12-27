@@ -59,14 +59,13 @@ jobs:
           ENDSCRIPT
 
       # =========================================================================
-      # 2. PATCH RUST (LOGIC & CONFIG) - NUCLEAR OPTION
+      # 2. PATCH RUST (LOGIC & CONFIG) - SHORT-CIRCUIT STRATEGY
       # =========================================================================
       - name: Patch Rust Logic (Node.js)
         working-directory: _pake
         shell: bash
         run: |
-          # We use a Node script to intelligently rewrite the Rust logic
-          # ensuring we catch the navigation handler regardless of formatting.
+          # Node script to inject a 'short-circuit' allowing Google domains immediately
           node -e "
           const fs = require('fs');
           const path = require('path');
@@ -94,74 +93,48 @@ jobs:
           const searchDir = 'src-tauri/src';
           console.log(\`Searching recursively in \${searchDir}...\`);
           
-          // First priority: look for 'on_navigation' which usually holds the logic
           let targetFiles = findRecursive(searchDir, 'on_navigation');
           
-          // Fallback: look for 'shell::open' if on_navigation isn't explicit
           if (targetFiles.length === 0) {
-            console.log('on_navigation not found, searching for shell::open usage...');
-            targetFiles = findRecursive(searchDir, 'shell::open');
-          }
-          
-          if (targetFiles.length === 0) {
-            console.error('CRITICAL: Could not find navigation logic (on_navigation or shell::open).');
-            // We exit 0 here to allow build to try anyway, but it likely won't fix the issue.
-            // But exiting 1 blocks the build entirely. Let's try to proceed.
-            process.exit(0); 
-          }
-          
-          const targetFile = targetFiles[0]; // Take the first match
-          console.log(\`Patching target file: \${targetFile}\`);
-          let content = fs.readFileSync(targetFile, 'utf8');
-
-          // 2. The Regex Strategy
-          // We look for the pattern: if ... != ... {
-          // This typically guards the shell::open call.
-          // We want to append && !url...contains('google') to the condition.
-          
-          const patch = \" && !url.as_str().contains(\\\"google\\\") \";
-          let patched = false;
-          
-          // Attempt Pattern A: url.host_str()
-          if (content.match(/if\s+url\.host_str\(\)\s*!=\s*Some\([a-zA-Z0-9_]+\)\s*\{/)) {
-             console.log('Detected Pattern A: url.host_str()');
-             content = content.replace(
-               /(if\s+url\.host_str\(\)\s*!=\s*Some\([a-zA-Z0-9_]+\))(\s*\{)/, 
-               \`\$1\${patch}\$2\`
-             );
-             patched = true;
-          } 
-          // Attempt Pattern B: host != target
-          else if (content.match(/if\s+[a-zA-Z0-9_]+\s*!=\s*[a-zA-Z0-9_]+\s*\{/)) {
-             console.log('Detected Pattern B: generic host comparison');
-             content = content.replace(
-               /(if\s+[a-zA-Z0-9_]+\s*!=\s*[a-zA-Z0-9_]+)(\s*\{)/, 
-               \`\$1\${patch}\$2\`
-             );
-             patched = true;
-          }
-          // Attempt Pattern C: direct shell::open guard (catch-all)
-          else if (content.includes('shell::open')) {
-             // If we can't match the exact if statement, we try to disable the shell::open call for google URLs
-             // This is a rough patch: replace 'shell::open' with 'if !url.to_string().contains("google") { shell::open'
-             console.log('Detected Pattern C: wrapping shell::open');
-             // We need to be careful with syntax here.
-             // We replace: shell::open(&app.shell_scope(), url.as_str(), None).unwrap();
-             // with: if !url.as_str().contains("google") { shell::open(...)... }
-             
-             // Regex to capture the full shell::open call
-             const regex = /shell::open\s*\([^;]+;/g;
-             content = content.replace(regex, (match) => {
-                return \`if !url.as_str().contains("google") { \${match} }\`;
-             });
-             patched = true;
-          }
-
-          if (patched) {
-            fs.writeFileSync(targetFile, content);
-            console.log('SUCCESS: Navigation logic patched to allow Google domains.');
+            console.error('CRITICAL: Could not find on_navigation logic.');
+            // Fallback: Try main.rs and lib.rs directly if search fails?
+            // process.exit(1); 
           } else {
-            console.error('WARNING: Regex did not match standard Pake navigation logic.');
+            const targetFile = targetFiles[0]; 
+            console.log(\`Patching target file: \${targetFile}\`);
+            let content = fs.readFileSync(targetFile, 'utf8');
+
+            // 2. Short-Circuit Injection Strategy
+            // We find the start of the closure: .on_navigation(move |url| {
+            // And inject: if url.as_str().contains(\"google\") { return true; }
+            
+            // Regex explanation:
+            // \.on_navigation\s*\(   -> match function call
+            // (?:move\s*)?           -> optional 'move' keyword
+            // \|([^|]+)\|            -> capture the variable name (e.g., 'url')
+            // \s*\{                  -> start of block
+            
+            const regex = /\.on_navigation\(\s*(?:move\s*)?\|([^|]+)\|\s*\{/g;
+            
+            if (regex.test(content)) {
+                content = content.replace(regex, (match, varName) => {
+                    console.log(\`Injecting Google whitelist for variable: \${varName}\`);
+                    // The Injection:
+                    return \`\${match} 
+                    // [PATCH] Allow Google Auth Redirects
+                    if \${varName}.as_str().contains("google") || \${varName}.as_str().contains("gstatic") { 
+                        return true; 
+                    }
+                    \`;
+                });
+                fs.writeFileSync(targetFile, content);
+                console.log('SUCCESS: Navigation logic patched via short-circuit.');
+            } else {
+                console.error('WARNING: Regex did not match on_navigation pattern. Manual inspection required.');
+                // Dump snippet for debugging if this fails again
+                const idx = content.indexOf('on_navigation');
+                if (idx !== -1) console.log(content.substring(idx, idx + 200));
+            }
           }
 
           // 3. Patch Cargo.toml for size (Safe Replace)
