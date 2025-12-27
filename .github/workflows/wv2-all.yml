@@ -43,48 +43,107 @@ jobs:
         run: |
           cat >> notebooklm-opt.js << 'ENDSCRIPT'
           (function () {
-            // NOTEBOOKLM DESKTOP OPTIMIZER (Windows / WebView2)
-            
+            // NOTEBOOKLM DESKTOP OPTIMIZER
             // CSS: Cosmetic cleanups only. 
-            // Removed aggressive rendering blocks that might hide auth popups.
             const css = `
-              body {
-                -webkit-font-smoothing: antialiased !important;
-              }
-              /* Ensure scrollbars are visible for agreement texts */
-              ::-webkit-scrollbar {
-                width: 8px;
-                height: 8px;
-              }
-              ::-webkit-scrollbar-thumb {
-                background: #ccc;
-                border-radius: 4px;
-              }
+              body { -webkit-font-smoothing: antialiased !important; }
+              ::-webkit-scrollbar { width: 8px; height: 8px; }
+              ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
             `;
-
             const style = document.createElement('style');
             style.id = 'notebooklm-lite-style';
             style.textContent = css;
             document.head.appendChild(style);
-
-            console.log('[NotebookLM Desktop] UI Optimizations loaded');
+            console.log('[NotebookLM Desktop] Optimizations loaded');
           })();
           ENDSCRIPT
 
       # =========================================================================
-      # 2. PATCH RUST (LOGIC & CONFIG)
+      # 2. PATCH RUST (LOGIC & CONFIG) - NUCLEAR OPTION
       # =========================================================================
-      - name: Patch Rust Logic
+      - name: Patch Rust Logic (Node.js)
         working-directory: _pake
         shell: bash
         run: |
-          # 1. Apply Deterministic Profile (Binary Size) via Node
+          # We use a Node script to intelligently rewrite the Rust logic
+          # ensuring we catch the navigation handler regardless of formatting.
           node -e "
-            const fs = require('fs');
-            const path = 'src-tauri/Cargo.toml';
-            let content = fs.readFileSync(path, 'utf8');
-            content = content.replace(/\[profile\.release\][\s\S]*?(?=(\[|$))/g, '');
-            const newProfile = \`
+          const fs = require('fs');
+          const path = require('path');
+          
+          // 1. Locate the correct file (lib.rs or main.rs)
+          const searchDir = 'src-tauri/src';
+          let targetFile = '';
+          const files = fs.readdirSync(searchDir);
+          
+          // Heuristic: Find file containing 'on_navigation'
+          for (const file of files) {
+            const fullPath = path.join(searchDir, file);
+            if (fs.statSync(fullPath).isFile()) {
+              const content = fs.readFileSync(fullPath, 'utf8');
+              if (content.includes('on_navigation')) {
+                targetFile = fullPath;
+                break;
+              }
+            }
+          }
+          
+          if (!targetFile) {
+            console.error('CRITICAL: Could not find file with on_navigation logic.');
+            process.exit(1);
+          }
+          
+          console.log(\`Patching target file: \${targetFile}\`);
+          let content = fs.readFileSync(targetFile, 'utf8');
+
+          // 2. The Regex Strategy
+          // We look for the pattern: if ... != ... {
+          // This typically guards the shell::open call.
+          // We want to append && !url...contains('google') to the condition.
+          
+          // Common Pake Pattern: if url.host_str() != Some(host) {
+          // or: if host != target_host {
+          
+          const patch = \" && !url.as_str().contains(\\\"google\\\") \";
+          
+          let patched = false;
+          
+          // Attempt Pattern A: url.host_str()
+          if (content.match(/if\s+url\.host_str\(\)\s*!=\s*Some\([a-zA-Z0-9_]+\)\s*\{/)) {
+             console.log('Detected Pattern A: url.host_str()');
+             content = content.replace(
+               /(if\s+url\.host_str\(\)\s*!=\s*Some\([a-zA-Z0-9_]+\))(\s*\{)/, 
+               \`\$1\${patch}\$2\`
+             );
+             patched = true;
+          } 
+          // Attempt Pattern B: host != target
+          else if (content.match(/if\s+[a-zA-Z0-9_]+\s*!=\s*[a-zA-Z0-9_]+\s*\{/)) {
+             console.log('Detected Pattern B: generic host comparison');
+             // We replace the first occurrence inside on_navigation usually
+             content = content.replace(
+               /(if\s+[a-zA-Z0-9_]+\s*!=\s*[a-zA-Z0-9_]+)(\s*\{)/, 
+               \`\$1\${patch}\$2\`
+             );
+             patched = true;
+          }
+
+          if (patched) {
+            fs.writeFileSync(targetFile, content);
+            console.log('SUCCESS: Navigation logic patched to allow Google domains.');
+          } else {
+            console.error('WARNING: Regex did not match standard Pake navigation logic. Dumping snippet for debug:');
+            const navIdx = content.indexOf('on_navigation');
+            console.log(content.substring(navIdx, navIdx + 300));
+            // Don't fail the build, but warn heavily
+          }
+
+          // 3. Patch Cargo.toml for size (Safe Replace)
+          const cargoPath = 'src-tauri/Cargo.toml';
+          if (fs.existsSync(cargoPath)) {
+            let cargo = fs.readFileSync(cargoPath, 'utf8');
+            cargo = cargo.replace(/\[profile\.release\][\s\S]*?(?=(\[|$))/g, '');
+            const profile = \`
           [profile.release]
           opt-level = 'z'
           lto = true
@@ -92,11 +151,12 @@ jobs:
           panic = 'abort'
           strip = true
           \`;
-            fs.writeFileSync(path, content.trim() + '\n' + newProfile);
-            console.log('Cargo.toml patched.');
+            fs.writeFileSync(cargoPath, cargo.trim() + '\\n' + profile);
+            console.log('Cargo.toml optimized.');
+          }
           "
 
-          # 2. Remove Menu (Cosmetic)
+          # 4. Remove Menu (Cosmetic)
           if [ -f "src-tauri/src/app/menu.rs" ]; then
             cat > "src-tauri/src/app/menu.rs" << 'EOF'
           use tauri::menu::Menu;
@@ -105,37 +165,15 @@ jobs:
           pub fn get_menu(_app: &AppHandle) -> Option<Menu<Wry>> { None }
           EOF
           fi
-          # Clean up menu refs
           sed -i 's/\.menu([^)]*)//g' "src-tauri/src/main.rs" 2>/dev/null || true
           sed -i 's/\.menu([^)]*)//g' "src-tauri/src/lib.rs" 2>/dev/null || true
 
-          # 3. CRITICAL: PATCH NAVIGATION LOGIC FOR GOOGLE AUTH
-          # Pake attempts to open external domains in system browser. 
-          # We must whitelist 'google.com' to stay inside the WebView.
-          
-          # Fix: Use direct grep instead of xargs to prevent exit code 123 if not found.
-          # We use '|| true' to ensure the step continues even if grep fails.
-          TARGET_FILE=$(grep -lR "on_navigation" src-tauri/src | head -n 1 || true)
-          
-          if [ -z "$TARGET_FILE" ]; then
-             echo "WARNING: Could not find navigation handler. Auth might fail."
-          else
-             echo "Patching navigation handler in $TARGET_FILE"
-             
-             # Fix: Escape ampersands (\&) in replacement string so sed treats them as literals
-             # instead of backreferences to the matched string.
-             # We look for the condition that triggers external browser opening.
-             sed -i 's/if.*host != target_host.*/if host != target_host \&\& !url.as_str().contains("google.com") \&\& !url.as_str().contains("googleusercontent.com")/' "$TARGET_FILE"
-          fi
-
       # =========================================================================
-      # 3. BUILD (NO RESTRICTIVE FLAGS)
+      # 3. BUILD
       # =========================================================================
       - name: Build NotebookLM App
         working-directory: _pake
         shell: bash
-        # Removed WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS entirely.
-        # This restores multi-process rendering required for Auth popups.
         run: |
           npx pake https://notebooklm.google/ \
             --name NotebookLM-Desktop \
