@@ -112,24 +112,19 @@ jobs:
           # 3. CRITICAL: PATCH NAVIGATION LOGIC FOR GOOGLE AUTH
           # Pake attempts to open external domains in system browser. 
           # We must whitelist 'google.com' to stay inside the WebView.
-          # We search for the logic that checks the domain and inject a bypass.
           
-          # Target file: usually src-tauri/src/lib.rs where the navigation handler lives
-          TARGET_FILE=$(find src-tauri/src -name "lib.rs" -o -name "main.rs" | xargs grep -l "on_navigation" | head -n 1)
+          # Fix: Use direct grep instead of xargs to prevent exit code 123 if not found.
+          # We use '|| true' to ensure the step continues even if grep fails.
+          TARGET_FILE=$(grep -lR "on_navigation" src-tauri/src | head -n 1 || true)
           
           if [ -z "$TARGET_FILE" ]; then
              echo "WARNING: Could not find navigation handler. Auth might fail."
           else
              echo "Patching navigation handler in $TARGET_FILE"
-             # This sed command looks for the block that decides to open shell and adds an exception for google.com
-             # It's a heuristic replace: if url domain != host, check if it contains google.com
-             # We simply force the browser to NOT open shell if url contains 'google.com'
              
-             # Note: This is a simplistic patch. Pake's logic is complex. 
-             # A safer bet for Pake v3 is to rely on the User Agent and not forcing shell open.
-             # We will attempt to disable the 'open in browser' logic for google domains.
-             
-             # Replacing the shell_open command trigger
+             # Fix: Escape ampersands (\&) in replacement string so sed treats them as literals
+             # instead of backreferences to the matched string.
+             # We look for the condition that triggers external browser opening.
              sed -i 's/if.*host != target_host.*/if host != target_host \&\& !url.as_str().contains("google.com") \&\& !url.as_str().contains("googleusercontent.com")/' "$TARGET_FILE"
           fi
 
